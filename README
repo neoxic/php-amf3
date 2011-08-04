@@ -1,0 +1,83 @@
+AMF3 extension for PHP
+======================
+
+What is PHP AMF3 extension?
+---------------------------
+
+PHP AMF3 extension offers two functions to use in PHP scripts:
+
+string amf3_encode(mixed value)
+
+- Encodes "value" into an AMF3 byte-stream
+- On success, returns a byte-stream representation of "value"
+- On error, returns FALSE and issues a warning message
+  (the only error case is a wrong argument count)
+
+mixed amf3_decode(string data [, int &count])
+
+- Decodes "data" (AMF3 byte-stream) into a PHP value
+- On success, returns a resulting PHP value
+- On error, returns NULL and issues a warning message
+- If parameter "count" is provided, the number of bytes read from "data" is stored
+  in it (value of -1 indicates an error)
+
+
+Required PHP version
+--------------------
+
+The source code was tested and built for PHP 5.2.9 and 5.3.1. Other PHP versions
+should be theoretically suitable too, but there might be a lack of some specific
+Zend API macros/functions in older versions, or the used macros/functions could
+become deprecated in new versions. Feel free to investigate that.
+
+
+Installation
+------------
+
+To install the PHP-AMF3 extension, type the following in the source directory:
+
+phpize
+./configure --enable-amf3
+make
+make install
+
+This should install the extension to your default PHP extension directory.
+If it doesn't work as expected, manually put the target amf3.so library to
+what the "extension_dir" variable in your php.ini file points to.
+Add the following line to the corresponding extension section in your php.ini:
+
+extension=amf3.so
+
+
+Usage constraints
+-----------------
+
+- NULL, boolean, integer, float (double), string and array values are
+  fully convertible back and forth to their corresponding types
+- In a special case, PHP integers are converted into AMF3 doubles according
+  to the specification (see the link below)
+- Encoder's string reference table is maintained comparing strings by value
+- Encoder's object reference table (arrays only are supported at the moment) is
+  maintained comparing objects by explicit PHP reference (read the note below)
+- Unsupported PHP values are represented as undefined values in AMF3
+- Unsupported AMF3 values are represented as null values in PHP
+
+Official Adobe AMF3 specification is available here:
+http://download.macromedia.com/pub/labs/amf/amf3_spec_121207.pdf
+
+NOTE: If you want an object to be encoded by reference, you should use an
+explicit reference definition ('&'). This is due to the fact that the native
+ActionScript decoder will reproduce the similar reference links in memory. If then
+references were managed implicitly, there would be no control over this behavior.
+
+NOTE: A PHP array is encoded as a sequence (dense array) when it has integer keys
+that start with zero and have no gaps. In all other cases, an array is considered
+as an associative array to avoid ambiguity.
+
+Please see a tiny usage sample with comments in example.php.
+
+
+Contact us
+----------
+You can contact us with questions, patches or bugs by sending an email to
+Arseny Vakhrushev <arseny.vakhrushev@gmail.com>
