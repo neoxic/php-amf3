@@ -26,7 +26,7 @@
 #include "php.h"
 #include "php_amf3.h"
 
-static function_entry amf3_functions[] = {
+static zend_function_entry amf3_functions[] = {
 	PHP_FE(amf3_encode, NULL)
 	PHP_FE(amf3_decode, NULL)
 	{NULL, NULL, NULL}
