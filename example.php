@@ -26,8 +26,6 @@ $obj = array(
 );
 
 $byte_stream = amf3_encode($obj);
-$s = bin2hex($byte_stream);
-print substr($s, strpos($s, bin2hex("sequence")))."\n";
 if ($byte_stream === false) {
 	error_log("amf3_encode() failed!");
 	return;
