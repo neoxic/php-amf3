@@ -22,14 +22,15 @@
 #include "config.h"
 #endif
 
-#include <arpa/inet.h>
+#include <endian.h>
+#include <stdint.h>
 #include "php.h"
 #include "php_amf3.h"
 
 static zend_function_entry amf3_functions[] = {
 	PHP_FE(amf3_encode, NULL)
 	PHP_FE(amf3_decode, NULL)
-	{NULL, NULL, NULL}
+	{ NULL, NULL, NULL }
 };
 
 zend_module_entry amf3_module_entry = {
@@ -186,14 +187,14 @@ void amf3_putRef(HashTable *ht, zval *val) {
 
 
 int amf3_encodeChar(amf3_chunk_t **chunk, char c) {
-	*chunk = amf3_appendChunk(*chunk, &c, sizeof(c));
-	return sizeof(c);
+	*chunk = amf3_appendChunk(*chunk, &c, 1);
+	return 1;
 }
 
 int amf3_encodeU29(amf3_chunk_t **chunk, int val) {
 	char buf[4];
 	int pos;
-	val &= ~0xe0000000;
+	val &= 0x1fffffff;
 	if (val <= 0x7f) {
 		buf[0] = val & 0x7f;
 		pos = 1;
@@ -223,7 +224,7 @@ int amf3_encodeU29(amf3_chunk_t **chunk, int val) {
 	return pos;
 }
 
-int amf3_decodeU29(int *val, char *buf, int size, int sign) {
+int amf3_decodeU29(int *val, char *buf, int size) {
 	int pos = 0, res = 0, tmp;
 	do {
 		if (pos >= size) return -1;
@@ -237,7 +238,6 @@ int amf3_decodeU29(int *val, char *buf, int size, int sign) {
 		}
 		pos++;
 	} while ((pos < 4) && (tmp & 0x80));
-	if (sign && (res & 0x10000000)) res |= ~0x0fffffff; // prolong sign bits if negative
 	*val = res;
 	return pos;
 }
@@ -245,39 +245,31 @@ int amf3_decodeU29(int *val, char *buf, int size, int sign) {
 int amf3_encodeDouble(amf3_chunk_t **chunk, double val) {
 	union {
 		double val;
-		uint32_t uint32[2];
+		uint64_t u64;
 	} data;
 	data.val = val;
-	if (htonl(1) != 1) { // Intel byte order (LSB first)
-		uint32_t tmp = htonl(data.uint32[0]);
-		data.uint32[0] = htonl(data.uint32[1]);
-		data.uint32[1] = tmp;
-	}
-	*chunk = amf3_appendChunk(*chunk, (char*)&data, sizeof(data));
-	return sizeof(data);
+	data.u64 = htobe64(data.u64);
+	*chunk = amf3_appendChunk(*chunk, (char*)&data, 8);
+	return 8;
 }
 
 int amf3_decodeDouble(double *val, char *buf, int size) {
 	union {
 		double val;
-		uint32_t uint32[2];
+		uint64_t u64;
 	} data;
-	if (size < sizeof(data)) return -1;
-	memcpy(&data, buf, sizeof(data));
-	if (htonl(1) != 1) { // Intel byte order (LSB first)
-		uint32_t tmp = ntohl(data.uint32[0]);
-		data.uint32[0] = ntohl(data.uint32[1]);
-		data.uint32[1] = tmp;
-	}
+	if (size < 8) return -1;
+	memcpy(&data, buf, 8);
+	data.u64 = be64toh(data.u64);
 	*val = data.val;
-	return sizeof(data);
+	return 8;
 }
 
 int amf3_encodeStr(amf3_chunk_t **chunk, char *str, int len, amf3_env_t *env TSRMLS_DC) {
 	int pos = 0, idx = amf3_getStrIdx(env, str, len);
 	if (idx >= 0) pos += amf3_encodeU29(chunk, idx << 1); // encode as a reference
 	else {
-		if (len > AMF3_MAX_INT) len = AMF3_MAX_INT;
+		len &= 0x1fffffff;
 		pos += amf3_encodeU29(chunk, (len << 1) | 1) + len;
 		*chunk = amf3_appendChunk(*chunk, str, len);
 	}
@@ -285,7 +277,7 @@ int amf3_encodeStr(amf3_chunk_t **chunk, char *str, int len, amf3_env_t *env TSR
 }
 
 int amf3_decodeStr(char **str, int *len, char *buf, int size, amf3_env_t *env TSRMLS_DC) {
-	int pfx, pos = amf3_decodeU29(&pfx, buf, size, 0);
+	int pfx, pos = amf3_decodeU29(&pfx, buf, size);
 	if (pos < 0) return -1;
 	if (!(pfx & 1)) { // decode as a reference
 		zval **val;
@@ -414,11 +406,12 @@ int amf3_decodeVal(zval **val, char *data, int pos, int size, amf3_env_t *env TS
 			break;
 		case AMF3_INTEGER: {
 			int i;
-			int res = amf3_decodeU29(&i, data + pos, size - pos, 1);
+			int res = amf3_decodeU29(&i, data + pos, size - pos);
 			if (res < 0) {
 				php_error_docref(NULL TSRMLS_CC, E_WARNING, "Can't decode integer at position %d", pos);
 				return -1;
 			}
+			if (i & 0x10000000) i |= ~0x1fffffff; // prolong sign bits if negative
 			amf3_initVal(val);
 			ZVAL_LONG(*val, i);
 			pos += res;
@@ -437,7 +430,7 @@ int amf3_decodeVal(zval **val, char *data, int pos, int size, amf3_env_t *env TS
 			break;
 		}
 		case AMF3_STRING: {
-			int pfx, res = amf3_decodeU29(&pfx, data + pos, size - pos, 0);
+			int pfx, res = amf3_decodeU29(&pfx, data + pos, size - pos);
 			if (res < 0) {
 				php_error_docref(NULL TSRMLS_CC, E_WARNING, "Can't decode string prefix at position %d", pos);
 				return -1;
@@ -463,7 +456,7 @@ int amf3_decodeVal(zval **val, char *data, int pos, int size, amf3_env_t *env TS
 			break;
 		}
 		case AMF3_DATE: {
-			int pfx, res = amf3_decodeU29(&pfx, data + pos, size - pos, 0);
+			int pfx, res = amf3_decodeU29(&pfx, data + pos, size - pos);
 			if (res < 0) {
 				php_error_docref(NULL TSRMLS_CC, E_WARNING, "Can't decode date prefix at position %d", pos);
 				return -1;
@@ -491,7 +484,7 @@ int amf3_decodeVal(zval **val, char *data, int pos, int size, amf3_env_t *env TS
 			break;
 		}
 		case AMF3_ARRAY: {
-			int pfx, res = amf3_decodeU29(&pfx, data + pos, size - pos, 0);
+			int pfx, res = amf3_decodeU29(&pfx, data + pos, size - pos);
 			if (res < 0) {
 				php_error_docref(NULL TSRMLS_CC, E_WARNING, "Can't decode array prefix at position %d", pos);
 				return -1;
