@@ -269,7 +269,7 @@ int amf3_encodeStr(amf3_chunk_t **chunk, char *str, int len, amf3_env_t *env TSR
 	int pos = 0, idx = amf3_getStrIdx(env, str, len);
 	if (idx >= 0) pos += amf3_encodeU29(chunk, idx << 1); // encode as a reference
 	else {
-		len &= 0x1fffffff;
+		if (len > AMF3_MAX_INT) len = AMF3_MAX_INT;
 		pos += amf3_encodeU29(chunk, (len << 1) | 1) + len;
 		*chunk = amf3_appendChunk(*chunk, str, len);
 	}
@@ -346,7 +346,8 @@ int amf3_encodeVal(amf3_chunk_t **chunk, zval *val, amf3_env_t *env TSRMLS_DC) {
 					if ((keyType != HASH_KEY_IS_LONG) || (idx != num)) break;
 					++num;
 				}
-				if ((num == zend_hash_num_elements(ht)) && (num < 0x8000000)) { // sequence of values with integer indexes starting from zero; less than 2^27 elements (to avoid insanity)
+				if (num == zend_hash_num_elements(ht)) { // sequence of values with integer indexes starting from zero
+					if (num > AMF3_MAX_INT) num = AMF3_MAX_INT;
 					pos += amf3_encodeU29(chunk, (num << 1) | 1); // dense part size
 					pos += amf3_encodeChar(chunk, 0x01); // end of associative part
 					for (zend_hash_internal_pointer_reset_ex(ht, &hp); (num-- > 0) && (zend_hash_get_current_data_ex(ht, (void **)&hv, &hp) == SUCCESS); zend_hash_move_forward_ex(ht, &hp)) {
@@ -362,7 +363,7 @@ int amf3_encodeVal(amf3_chunk_t **chunk, zval *val, amf3_env_t *env TSRMLS_DC) {
 						} else if (keyType == HASH_KEY_IS_LONG) {
 							keyLen = sprintf(keyBuf, "%ld", idx);
 							pos += amf3_encodeStr(chunk, keyBuf, keyLen, env TSRMLS_CC);
-						} else break;
+						} else continue;
 						pos += amf3_encodeVal(chunk, *hv, env TSRMLS_CC);
 					}
 					pos += amf3_encodeChar(chunk, 0x01); // end of associative part
