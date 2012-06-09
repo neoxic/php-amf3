@@ -22,8 +22,6 @@
 #include "config.h"
 #endif
 
-#include <endian.h>
-#include <stdint.h>
 #include "php.h"
 #include "php_amf3.h"
 
@@ -196,28 +194,28 @@ int amf3_encodeU29(amf3_chunk_t **chunk, int val) {
 	int pos;
 	val &= 0x1fffffff;
 	if (val <= 0x7f) {
-		buf[0] = val & 0x7f;
+		buf[0] = val;
 		pos = 1;
 	} else if (val <= 0x3fff) {
 		buf[1] = val & 0x7f;
 		val >>= 7;
-		buf[0] = (val & 0x7f) | 0x80;
+		buf[0] = val | 0x80;
 		pos = 2;
 	} else if (val <= 0x1fffff) {
 		buf[2] = val & 0x7f;
 		val >>= 7;
-		buf[1] = (val & 0x7f) | 0x80;
+		buf[1] = val | 0x80;
 		val >>= 7;
-		buf[0] = (val & 0x7f) | 0x80;
+		buf[0] = val | 0x80;
 		pos = 3;
 	} else {
-		buf[3] = val & 0xff;
+		buf[3] = val;
 		val >>= 8;
-		buf[2] = (val & 0x7f) | 0x80;
+		buf[2] = val | 0x80;
 		val >>= 7;
-		buf[1] = (val & 0x7f) | 0x80;
+		buf[1] = val | 0x80;
 		val >>= 7;
-		buf[0] = (val & 0x7f) | 0x80;
+		buf[0] = val | 0x80;
 		pos = 4;
 	}
 	*chunk = amf3_appendChunk(*chunk, buf, pos);
@@ -236,32 +234,40 @@ int amf3_decodeU29(int *val, char *buf, int size) {
 			res <<= 7;
 			res |= tmp & 0x7f;
 		}
-		pos++;
-	} while ((pos < 4) && (tmp & 0x80));
+	} while ((++pos < 4) && (tmp & 0x80));
 	*val = res;
 	return pos;
 }
 
 int amf3_encodeDouble(amf3_chunk_t **chunk, double val) {
 	union {
-		double val;
-		uint64_t u64;
-	} data;
-	data.val = val;
-	data.u64 = htobe64(data.u64);
-	*chunk = amf3_appendChunk(*chunk, (char*)&data, 8);
+		double d;
+		int64_t l;
+	} u = { val };
+	int64_t l = u.l;
+	char buf[8];
+	int i;
+	for (i = 0; i < 8; ++i) {
+		buf[7 - i] = l;
+		l >>= 8;
+	}
+	*chunk = amf3_appendChunk(*chunk, buf, 8);
 	return 8;
 }
 
 int amf3_decodeDouble(double *val, char *buf, int size) {
-	union {
-		double val;
-		uint64_t u64;
-	} data;
 	if (size < 8) return -1;
-	memcpy(&data, buf, 8);
-	data.u64 = be64toh(data.u64);
-	*val = data.val;
+	int64_t l = 0;
+	int i;
+	for (i = 0; i < 8; ++i) {
+		l <<= 8;
+		l |= buf[i] & 0xff;
+	}
+	union {
+		int64_t l;
+		double d;
+	} u = { l };
+	*val = u.d;
 	return 8;
 }
 
