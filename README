@@ -13,13 +13,15 @@ string amf3_encode(mixed $value)
 - On error, returns FALSE and issues a warning message
   (the only error case is wrong argument count).
 
-mixed amf3_decode(string $amf3 [, int &$count])
+mixed amf3_decode(string $amf3 [, int &$count, bool $assoc = FALSE])
 
 - Decodes $amf3 (AMF3 byte-stream) into a PHP value.
 - On success, returns a resulting PHP value.
 - On error, returns NULL and issues a warning message.
 - If $count is provided, the number of bytes actually read from the string
   will be stored in it (the value of -1 indicates an error).
+- If $assoc is set to TRUE, AMF values encoded as objects will be returned as
+  associative arrays instead of class instances.
 
 
 Installation
