@@ -13,13 +13,25 @@ string amf3_encode(mixed $value)
 - On error, returns FALSE and issues a warning message
   (the only error case is wrong argument count).
 
-mixed amf3_decode(string $amf3 [, int &$count])
+mixed amf3_decode(string $amf3 [, int &$count [, $map = 0 ]])
 
 - Decodes $amf3 (AMF3 byte-stream) into a PHP value.
 - On success, returns a resulting PHP value.
 - On error, returns NULL and issues a warning message.
 - If $count is provided, the number of bytes actually read from the string
   will be stored in it (the value of -1 indicates an error).
+- If $map is 0 (object mapping is off), AMF3 objects are returned as plain PHP
+  associative arrays. Otherwise, class mapping is made according to the mode
+  bits set. The following bit combinations can be used in a PHP script:
+    AMF3_MAP
+      Perform class mapping (no autoloading).
+    AMF3_MAP_AUTOLOAD
+      Perform class mapping (with autoloading).
+    AMF3_MAP_CONSTRUCT
+      Call the constructor of a decoded object.
+
+  WARNING! Mapping should be used with great care since it can potentially
+  lead to a breach in security.
 
 
 Installation

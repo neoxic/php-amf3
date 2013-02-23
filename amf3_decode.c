@@ -9,6 +9,7 @@
 
 #include "php.h"
 #include "php_amf3.h"
+#include "Zend/zend_interfaces.h"
 #include "amf3.h"
 
 
@@ -21,7 +22,7 @@ typedef struct {
 } Traits;
 
 
-static int decodeValue(zval **val, const char* buf, int pos, int size, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC);
+static int decodeValue(zval **val, const char* buf, int pos, int size, int map, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC);
 
 static int decodeU29(int *val, const char *buf, int pos, int size TSRMLS_DC) {
 	int ofs = 0, res = 0, tmp;
@@ -154,7 +155,7 @@ static int decodeDate(zval **val, const char* buf, int pos, int size, HashTable 
 	return pos - old;
 }
 
-static int decodeArray(zval **val, const char* buf, int pos, int size, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
+static int decodeArray(zval **val, const char* buf, int pos, int size, int map, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
 	int old = pos, ofs, len;
 	ofs = decodeRef(&len, val, buf, pos, size, oht TSRMLS_CC);
 	if (ofs < 0) return -1;
@@ -167,13 +168,13 @@ static int decodeArray(zval **val, const char* buf, int pos, int size, HashTable
 		ZVAL_RESET(*val);
 		array_init(*val);
 		storeRef(*val, oht);
-		for ( ;; ) { // associative array portion
+		for ( ;; ) { /* associative portion */
 			ofs = decodeStr(&key, &keyLen, 0, buf, pos, size, sht, 0 TSRMLS_CC);
 			if (ofs < 0) return -1;
 			pos += ofs;
 			if (!keyLen) break;
 			hv = 0;
-			ofs = decodeValue(&hv, buf, pos, size, sht, oht, tht TSRMLS_CC);
+			ofs = decodeValue(&hv, buf, pos, size, map, sht, oht, tht TSRMLS_CC);
 			if (hv) { /* need a trailing \0 in the key string for a proper call to 'add_assoc_zval_ex' */
 				if (keyLen < sizeof(keyBuf)) {
 					memcpy(keyBuf, key, keyLen);
@@ -190,9 +191,9 @@ static int decodeArray(zval **val, const char* buf, int pos, int size, HashTable
 			if (ofs < 0) return -1;
 			pos += ofs;
 		}
-		while (len--) {
+		while (len--) { /* dense portion */
 			hv = 0;
-			ofs = decodeValue(&hv, buf, pos, size, sht, oht, tht TSRMLS_CC);
+			ofs = decodeValue(&hv, buf, pos, size, map, sht, oht, tht TSRMLS_CC);
 			if (hv) add_next_index_zval(*val, hv);
 			if (ofs < 0) return -1;
 			pos += ofs;
@@ -201,21 +202,19 @@ static int decodeArray(zval **val, const char* buf, int pos, int size, HashTable
 	return pos - old;
 }
 
-static int decodeObject(zval **val, const char* buf, int pos, int size, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
+static int decodeObject(zval **val, const char* buf, int pos, int size, int map, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
 	int old = pos, ofs, pfx;
 	ofs = decodeRef(&pfx, val, buf, pos, size, oht TSRMLS_CC);
 	if (ofs < 0) return -1;
 	pos += ofs;
 	if (pfx >= 0) {
+		zend_class_entry *ce = 0;
 		Traits *tr;
-		zval *pv;
+		zval *hv;
 		const char *key;
 		char keyBuf[64];
 		int keyLen;
 		int def = pfx & 1;
-		ZVAL_RESET(*val);
-		object_init(*val);
-		storeRef(*val, oht);
 		pfx >>= 1;
 		if (def) { /* new class definition */
 			int i, n = pfx >> 2;
@@ -238,10 +237,13 @@ static int decodeObject(zval **val, const char* buf, int pos, int size, HashTabl
 						return -1;
 					}
 					pos += ofs;
-					fld[i] = estrndup(key, keyLen); /* copying because a trailing \0 is needed for a key string */
+					fld[i] = estrndup(key, keyLen); /* a trailing \0 is needed later for a key string */
 					fldLen[i] = keyLen + 1;
 				}
 			}
+			char tmp[20];
+			memset(tmp, 0, 20);
+			memcpy(tmp, cls, clsLen);
 			tr = emalloc(sizeof(Traits));
 			tr->fmt = pfx & 0x03;
 			tr->cnt = n;
@@ -251,30 +253,52 @@ static int decodeObject(zval **val, const char* buf, int pos, int size, HashTabl
 			tr->fldLen = fldLen;
 			zend_hash_index_update(tht, zend_hash_num_elements(tht), &tr, sizeof(tr), NULL);
 		} else { /* existing class definition */
-			Traits **hv;
-			if (zend_hash_index_find(tht, pfx, (void **)&hv) == FAILURE) {
+			Traits **trp;
+			if (zend_hash_index_find(tht, pfx, (void **)&trp) == FAILURE) {
 				php_error(E_WARNING, "Missing class definition #%d at position %d", pfx, pos);
 				return -1;
 			}
-			tr = *hv;
+			tr = *trp;
 		}
+		ZVAL_RESET(*val);
+		if (!map) array_init(*val);
+		else {
+			if (!tr->clsLen) object_init(*val);
+			else {
+				int mode = ZEND_FETCH_CLASS_DEFAULT | ZEND_FETCH_CLASS_SILENT;
+				if (!(map & AMF3_MAP_AUTOLOAD)) mode |= ZEND_FETCH_CLASS_NO_AUTOLOAD;
+				ce = zend_fetch_class(tr->cls, tr->clsLen, mode TSRMLS_CC);
+				if (!ce) {
+					php_error(E_WARNING, "Class '%s' fetching failed at position %d", tr->cls, pos);
+					return -1;
+				}
+				object_init_ex(*val, ce);
+			}
+		}
+		storeRef(*val, oht);
 		if (tr->fmt & 1) { /* externalizable */
-			pv = 0;
-			ofs = decodeValue(&pv, buf, pos, size, sht, oht, tht TSRMLS_CC);
-			if (pv) {
-				add_property_zval(*val, "_data", pv);
-				Z_DELREF_P(pv); /* 'add_property_zval' increments the refcount */
+			hv = 0;
+			ofs = decodeValue(&hv, buf, pos, size, map, sht, oht, tht TSRMLS_CC);
+			if (hv) {
+				if (!map) add_assoc_zval(*val, "_data", hv);
+				else {
+					add_property_zval(*val, "_data", hv);
+					Z_DELREF_P(hv);
+				}
 			}
 			if (ofs < 0) return -1;
 			pos += ofs;
 		} else {
 			int i;
 			for (i = 0; i < tr->cnt; ++i) {
-				pv = 0;
-				ofs = decodeValue(&pv, buf, pos, size, sht, oht, tht TSRMLS_CC);
-				if (pv) {
-					add_property_zval_ex(*val, tr->fld[i], tr->fldLen[i], pv TSRMLS_CC);
-					Z_DELREF_P(pv); /* 'add_property_zval_ex' increments the refcount */
+				hv = 0;
+				ofs = decodeValue(&hv, buf, pos, size, map, sht, oht, tht TSRMLS_CC);
+				if (hv) {
+					if (!map) add_assoc_zval_ex(*val, tr->fld[i], tr->fldLen[i], hv);
+					else {
+						add_property_zval_ex(*val, tr->fld[i], tr->fldLen[i], hv TSRMLS_CC);
+						Z_DELREF_P(hv);
+					}
 				}
 				if (ofs < 0) return -1;
 				pos += ofs;
@@ -285,33 +309,44 @@ static int decodeObject(zval **val, const char* buf, int pos, int size, HashTabl
 					if (ofs < 0) return -1;
 					pos += ofs;
 					if (!keyLen) break;
-					pv = 0;
-					ofs = decodeValue(&pv, buf, pos, size, sht, oht, tht TSRMLS_CC);
-					if (pv) { /* need a trailing \0 in the key string for a proper call to 'add_property_zval_ex' */
+					hv = 0;
+					ofs = decodeValue(&hv, buf, pos, size, map, sht, oht, tht TSRMLS_CC);
+					if (hv) { /* need a trailing \0 in the key string for a proper call to 'add_property_zval_ex' */
 						if (keyLen < sizeof(keyBuf)) {
 							memcpy(keyBuf, key, keyLen);
 							keyBuf[keyLen] = 0;
-							add_property_zval_ex(*val, keyBuf, keyLen + 1, pv TSRMLS_CC);
+							if (!map) add_assoc_zval_ex(*val, keyBuf, keyLen + 1, hv);
+							else {
+								add_property_zval_ex(*val, keyBuf, keyLen + 1, hv TSRMLS_CC);
+								Z_DELREF_P(hv);
+							}
 						} else {
 							char *tmpBuf = emalloc(keyLen + 1);
 							memcpy(tmpBuf, key, keyLen);
 							tmpBuf[keyLen] = 0;
-							add_property_zval_ex(*val, tmpBuf, keyLen + 1, pv TSRMLS_CC);
+							if (!map) add_assoc_zval_ex(*val, tmpBuf, keyLen + 1, hv);
+							else {
+								add_property_zval_ex(*val, tmpBuf, keyLen + 1, hv TSRMLS_CC);
+								Z_DELREF_P(hv);
+							}
 							efree(tmpBuf);
 						}
-						Z_DELREF_P(pv); /* 'add_property_zval_ex' increments the refcount */
 					}
 					if (ofs < 0) return -1;
 					pos += ofs;
 				}
 			}
 		}
-		if (tr->clsLen) add_property_stringl(*val, "_class", tr->cls, tr->clsLen, 1);
+		if (!map && tr->clsLen) add_assoc_stringl(*val, "_class", (char *)tr->cls, tr->clsLen, 1);
+		else if (ce && (map & AMF3_MAP_CONSTRUCT)) { /* call the constructor */
+			zend_call_method_with_0_params(val, ce, &ce->constructor, NULL, NULL);
+			if (EG(exception)) return -1;
+		}
 	}
 	return pos - old;
 }
 
-static int decodeValue(zval **val, const char* buf, int pos, int size, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
+static int decodeValue(zval **val, const char* buf, int pos, int size, int map, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
 	int old = pos, ofs;
 	if (pos >= size) {
 		php_error(E_WARNING, "Insufficient type data at position %d", pos);
@@ -368,12 +403,12 @@ static int decodeValue(zval **val, const char* buf, int pos, int size, HashTable
 			pos += ofs;
 			break;
 		case AMF3_ARRAY:
-			ofs = decodeArray(val, buf, pos, size, sht, oht, tht TSRMLS_CC);
+			ofs = decodeArray(val, buf, pos, size, map, sht, oht, tht TSRMLS_CC);
 			if (ofs < 0) return -1;
 			pos += ofs;
 			break;
 		case AMF3_OBJECT:
-			ofs = decodeObject(val, buf, pos, size, sht, oht, tht TSRMLS_CC);
+			ofs = decodeObject(val, buf, pos, size, map, sht, oht, tht TSRMLS_CC);
 			if (ofs < 0) return -1;
 			pos += ofs;
 			break;
@@ -399,12 +434,13 @@ PHP_FUNCTION(amf3_decode) {
 	const char *buf;
 	int size, ofs;
 	zval *count = 0;
+	long map = 0;
 	HashTable sht, oht, tht;
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s|z", &buf, &size, &count) == FAILURE) return;
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s|zl", &buf, &size, &count, &map) == FAILURE) return;
 	zend_hash_init(&sht, 0, NULL, ZVAL_PTR_DTOR, 0);
 	zend_hash_init(&oht, 0, NULL, ZVAL_PTR_DTOR, 0);
 	zend_hash_init(&tht, 0, NULL, traitsPtrDtor, 0);
-	ofs = decodeValue(&return_value, buf, 0, size, &sht, &oht, &tht TSRMLS_CC);
+	ofs = decodeValue(&return_value, buf, 0, size, map, &sht, &oht, &tht TSRMLS_CC);
 	zend_hash_destroy(&sht);
 	zend_hash_destroy(&oht);
 	zend_hash_destroy(&tht);

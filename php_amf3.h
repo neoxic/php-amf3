@@ -24,10 +24,5 @@ extern zend_module_entry amf3_module_entry;
 #include "TSRM.h"
 #endif
 
-PHP_MINFO_FUNCTION(amf3);
-
-PHP_FUNCTION(amf3_encode);
-PHP_FUNCTION(amf3_decode);
-
 
 #endif
