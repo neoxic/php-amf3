@@ -25,10 +25,10 @@ mixed amf3_decode(string $amf3 [, int &$count [, $map = 0 ]])
   bits set. The following bit combinations can be used in a PHP script:
     AMF3_MAP
       Perform class mapping (no autoloading).
-    AMF3_MAP_AUTOLOAD
+    AMF3_AUTOLOAD
       Perform class mapping (with autoloading).
-    AMF3_MAP_CONSTRUCT
-      Call the constructor of a decoded object.
+    AMF3_CONSTRUCT
+      Call the default constructor of a decoded object's class.
 
   WARNING! Mapping should be used with great care since it can potentially
   lead to a breach in security.
@@ -51,6 +51,10 @@ Add the following line to the corresponding extension section in your php.ini:
 
 extension=amf3.so
 
+To run tests, type:
+
+make test
+
 
 Usage constraints
 -----------------
@@ -61,10 +65,7 @@ Usage constraints
   to the specification (see the link below).
 - A PHP array is encoded as a sequence (dense array) when it has integer
   keys that start with zero and have no gaps. In all other cases, an array is
-  encoded as an associative array to avoid ambiguity.
-- The AMF3 Object type is converted into an 'stdClass' object with the
-  additional '_class' (class name) and '_data' (externalizable object's data)
-  fields set when applicable.
+  encoded as a plain associative array to avoid ambiguity.
 
 Official Adobe AMF3 specification is available here:
 http://download.macromedia.com/pub/labs/amf/amf3_spec_121207.pdf

@@ -134,8 +134,8 @@ static int decodeRef(int *len, zval **val, const char* buf, int pos, int size, H
 }
 
 static void storeRef(zval *val, HashTable *ht) {
-	zend_hash_index_update(ht, zend_hash_num_elements(ht), &val, sizeof(val), NULL);
 	Z_ADDREF_P(val);
+	zend_hash_index_update(ht, zend_hash_num_elements(ht), &val, sizeof(val), NULL);
 }
 
 static int decodeDate(zval **val, const char* buf, int pos, int size, HashTable *ht TSRMLS_DC) {
@@ -266,7 +266,7 @@ static int decodeObject(zval **val, const char* buf, int pos, int size, int map,
 			if (!tr->clsLen) object_init(*val);
 			else {
 				int mode = ZEND_FETCH_CLASS_DEFAULT | ZEND_FETCH_CLASS_SILENT;
-				if (!(map & AMF3_MAP_AUTOLOAD)) mode |= ZEND_FETCH_CLASS_NO_AUTOLOAD;
+				if (!(map & AMF3_AUTOLOAD)) mode |= ZEND_FETCH_CLASS_NO_AUTOLOAD;
 				ce = zend_fetch_class(tr->cls, tr->clsLen, mode TSRMLS_CC);
 				if (!ce) {
 					php_error(E_WARNING, "Class '%s' fetching failed at position %d", tr->cls, pos);
@@ -338,7 +338,7 @@ static int decodeObject(zval **val, const char* buf, int pos, int size, int map,
 			}
 		}
 		if (!map && tr->clsLen) add_assoc_stringl(*val, "_class", (char *)tr->cls, tr->clsLen, 1);
-		else if (ce && (map & AMF3_MAP_CONSTRUCT)) { /* call the constructor */
+		else if (ce && (map & AMF3_CONSTRUCT)) { /* call the constructor */
 			zend_call_method_with_0_params(val, ce, &ce->constructor, NULL, NULL);
 			if (EG(exception)) return -1;
 		}
