@@ -20,7 +20,7 @@ mixed amf3_decode(string $amf3 [, int &$count [, $map = 0 ]])
 - On error, returns NULL and issues a warning message.
 - If $count is provided, the number of bytes actually read from the string
   will be stored in it (the value of -1 indicates an error).
-- If $map is 0 (object mapping is off), AMF3 objects are returned as plain PHP
+- If $map is 0 (class mapping is off), AMF3 objects are returned as plain PHP
   associative arrays. Otherwise, class mapping is made according to the mode
   bits set. The following bit combinations can be used in a PHP script:
     AMF3_MAP
@@ -30,8 +30,8 @@ mixed amf3_decode(string $amf3 [, int &$count [, $map = 0 ]])
     AMF3_CONSTRUCT
       Call the default constructor of a decoded object's class.
 
-  WARNING! Mapping should be used with great care since it can potentially
-  lead to a breach in security.
+  WARNING! The class mapping feature should be used with great care since it
+  can potentially lead to a breach in security.
 
 
 Installation
