@@ -94,19 +94,17 @@ function spawn() {
 
 // Stress Test
 
-for ($i = 0; $i < 50; ++$i) {
-	for ($j = 0; $j < 20; ++$j) {
-		$obj = spawn();
-		$str = amf3_encode($obj);
-		$size = strlen($str);
-		$_size;
-		$_obj = amf3_decode($str, $_size, AMF3_MAP);
-		if (($size != $_size) || ($obj != $_obj)) {
-			print(bin2hex(var_export($obj, true)) . "\n");
-			print(bin2hex(var_export($_obj, true)) . "\n");
-			print(bin2hex($str) . "\n");
-			die();
-		}
+for ($i = 0; $i < 1000; ++$i) {
+	$obj = spawn();
+	$str = amf3_encode($obj);
+	$size = strlen($str);
+	$_size;
+	$_obj = amf3_decode($str, $_size, AMF3_MAP);
+	if (($size != $_size) || ($obj != $_obj)) {
+		print(bin2hex(var_export($obj, true)) . "\n");
+		print(bin2hex(var_export($_obj, true)) . "\n");
+		print(bin2hex($str) . "\n");
+		die();
 	}
 }
 
