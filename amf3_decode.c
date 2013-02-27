@@ -413,7 +413,7 @@ static int decodeValue(zval **val, const char* buf, int pos, int size, int map, 
 			pos += ofs;
 			break;
 		default:
-			php_error(E_WARNING, "Invalid type value %d at position %d", buf[pos - 1], pos - 1);
+			php_error(E_WARNING, "Unsupported value type %d at position %d", buf[pos - 1], pos - 1);
 			return -1;
 	}
 	return pos - old;

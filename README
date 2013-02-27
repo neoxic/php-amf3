@@ -59,8 +59,10 @@ make test
 Usage constraints
 -----------------
 
-- NULL, boolean, integer, float (double), string and array values are
-  fully convertible back and forth to their corresponding types.
+- PHP NULL, boolean, integer, float (double), string, array and object values
+  are fully convertible back and forth to their corresponding AMF3 types.
+- AMF3 Date becomes a float value whereas XML, XMLDocument and ByteArray
+  become strings.
 - In a special case, PHP integers are converted into AMF3 doubles according
   to the specification (see the link below).
 - A PHP array is encoded as a sequence (dense array) when it has integer
