@@ -24,10 +24,14 @@
 #define AMF3_MAX_INT     268435455 /*  (2^28)-1 */
 #define AMF3_MIN_INT    -268435456 /* -(2^28)   */
 
-// Mapping mode bits
-#define AMF3_MAP         0x01
-#define AMF3_AUTOLOAD    0x02
-#define AMF3_CONSTRUCT   0x04
+// Encoding options
+#define AMF3_FORCE_OBJECT      0x01
+
+// Decoding options
+#define AMF3_CLASS_MAP         0x01
+#define AMF3_CLASS_AUTOLOAD    0x02
+#define AMF3_CLASS_CONSTRUCT   0x04
+
 
 #define ZVAL_RESET(A)         \
 	if (!(A)) {               \

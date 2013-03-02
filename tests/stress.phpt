@@ -15,11 +15,19 @@ function prob($p) {
 	return randf() < $p;
 }
 
+function randStr($safe = false) {
+	$t = array();
+	$n = rand(0, 30);
+	$c = $safe ? 1 : 0;
+	for ($i = 0; $i < $n; ++$i) $t[] = chr(rand($c, 10));
+	return implode($t);
+}
+
 class AAA {};
 class BBB {};
 class CCC {};
 
-function randClass() {
+function randObj() {
 	switch (rand(0, 3)) {
 		case 0: return new stdClass();
 		case 1: return new AAA();
@@ -33,19 +41,14 @@ $vals = array(
 	function () { return prob(0.5); }, // boolean
 	function () { return rand(-268435456, 268435455); }, // integer
 	function () { return (randf() - 0.5) * 1234567890; }, // double
-	function () { // string
-		$t = array();
-		$n = rand(0, 30);
-		for ($i = 0; $i < $n; ++$i) $t[] = chr(rand(0, 10));
-		return implode($t);
-	},
+	function () { return randStr(); }, // string
 );
 $refs = array();
 $any;
 $objs = array(
 	function () use (&$refs) { // reference
 		$n = count($refs);
-		return $n > 0 ? $refs[rand(0, $n - 1)] : NULL;
+		return $n ? $refs[rand(0, $n - 1)] : NULL;
 	},
 	function ($d) use (&$refs, &$any) { // dense array
 		$a = array();
@@ -61,27 +64,28 @@ $objs = array(
 		$a = array();
 		$n = rand(0, 10);
 		for ($i = 0; $i < $n; ++$i) {
-			$k = $vals[4](); // random string key
+			$k = randStr(true);
 			$v = $any($d + 1);
-			if ($k && $v !== NULL) $a[$k] = $v;
+			if ($k && ($v !== NULL)) $a[$k] = $v;
 		}
 		$refs[] = $a;
 		return $a;
 	},
 	function ($d) use (&$vals, &$refs, &$any) { // object
-		$o = randClass();
+		$o = randObj();
 		$n = rand(0, 10);
 		for ($i = 0; $i < $n; ++$i) {
-			$k = md5($vals[4]()); // random property
+			$k = randStr(true);
 			$v = $any($d + 1);
-			if ($k && $v !== NULL) $o->$k = $v;
+			if ($k && ($v !== NULL)) $o->$k = $v;
 		}
 		$refs[] = $o;
 		return $o;
 	},
 );
-$any = function ($d) use (&$vals, &$objs) {
-	if (($d < 4) && prob(0.7)) return $objs[rand(0, count($objs) - 1)]($d);
+$nobj;
+$any = function ($d) use (&$vals, &$objs, &$nobj) {
+	if (($d < 4) && prob(0.7)) return $objs[rand(0, count($objs) - ($nobj ? 2 : 1))]($d);
 	return $vals[rand(0, count($vals) - 1)]();
 };
 
@@ -95,15 +99,16 @@ function spawn() {
 // Stress Test
 
 for ($i = 0; $i < 1000; ++$i) {
+	$nobj = prob(0.5);
 	$obj = spawn();
-	$str = amf3_encode($obj);
+	$str = amf3_encode($obj, $nobj ? AMF3_FORCE_OBJECT : 0);
 	$size = strlen($str);
 	$_size;
-	$_obj = amf3_decode($str, $_size, AMF3_MAP);
+	$_obj = amf3_decode($str, $_size, !$nobj ? AMF3_CLASS_MAP : 0);
 	if (($size != $_size) || ($obj != $_obj)) {
+		print(bin2hex($str) . "\n");
 		print(bin2hex(var_export($obj, true)) . "\n");
 		print(bin2hex(var_export($_obj, true)) . "\n");
-		print(bin2hex($str) . "\n");
 		die();
 	}
 }
