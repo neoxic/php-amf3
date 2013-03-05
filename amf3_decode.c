@@ -241,9 +241,6 @@ static int decodeObject(zval **val, const char* buf, int pos, int size, int opts
 					flen[i] = klen + 1;
 				}
 			}
-			char tmp[20];
-			memset(tmp, 0, 20);
-			memcpy(tmp, cls, clen);
 			tr = emalloc(sizeof(Traits));
 			tr->fmt = pfx & 0x03;
 			tr->cnt = n;
