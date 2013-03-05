@@ -1,6 +1,5 @@
-ARG_ENABLE("amf3", "for AMF3 support", "no");
+ARG_ENABLE("amf3", "AMF3 support", "no");
 if (PHP_AMF3 != "no") {
-  EXTENSION("amf3", "amf3.c");
-  ADD_SOURCE("amf3_encode.c");
-  ADD_SOURCE("amf3_decode.c");
+	EXTENSION("amf3", "amf3.c amf3_encode.c amf3_decode.c");
+	AC_DEFINE("HAVE_AMF3", 1, "AMF3 support");
 }
