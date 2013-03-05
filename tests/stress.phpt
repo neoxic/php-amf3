@@ -96,7 +96,7 @@ function spawn() {
 }
 
 
-// Stress Test
+// Stress test
 
 for ($i = 0; $i < 1000; ++$i) {
 	$nobj = prob(0.5);
@@ -110,6 +110,11 @@ for ($i = 0; $i < 1000; ++$i) {
 		print(bin2hex(var_export($obj, true)) . "\n");
 		print(bin2hex(var_export($_obj, true)) . "\n");
 		die();
+	}
+
+	// Additional decoder's robustness test
+	for ($pos = 1; $pos < $size; ++$pos) {
+		@amf3_decode(substr($str, $pos), $_size);
 	}
 }
 

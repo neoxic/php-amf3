@@ -226,6 +226,10 @@ static int decodeObject(zval **val, const char* buf, int pos, int size, int opts
 			if (ofs < 0) return -1;
 			pos += ofs;
 			if (n > 0) {
+				if ((pos + n) > size) { /* sanity check before emalloc */
+					php_error(E_WARNING, "Invalid number of class members (%d) at position %d", n, pos);
+					return -1;
+				}
 				fld = emalloc(sizeof(*fld) * n);
 				flen = emalloc(sizeof(*flen) * n);
 				for (i = 0; i < n; ++i) { /* static member names */
