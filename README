@@ -44,7 +44,7 @@ Installation
 To install the extension, type the following in the source directory:
 
 phpize
-./configure --enable-amf3
+./configure
 make
 make install
 
@@ -90,7 +90,7 @@ Version 1.2.0 [03/Mar/2013]
 
 Version 1.1.0 [20/Feb/2013]
 + Support for previously unsupported AMF3 types.
-+ Major code re-design.
++ Major code revision.
 + License changed from GPL to MIT.
 
 Version 1.0.0 [03/Feb/2010]
