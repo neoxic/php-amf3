@@ -222,27 +222,36 @@ static int decodeObject(zval **val, const char* buf, int pos, int size, int opts
 			int clen;
 			char **fld = 0;
 			int *flen = 0;
-			if ((pos + n) > size) { /* sanity check */
-				php_error(E_WARNING, "Invalid number of class members (%d) at position %d", n, pos);
-				return -1;
-			}
 			ofs = decodeStr(&cls, &clen, 0, buf, pos, size, 0, sht TSRMLS_CC);
 			if (ofs < 0) return -1;
 			pos += ofs;
 			if (n > 0) {
+				if ((pos + n * 2) > size) { /* rough security check */
+					php_error(E_WARNING, "Inappropriate number of declared class members at position %d", pos);
+					return -1;
+				}
 				fld = emalloc(sizeof(*fld) * n);
 				flen = emalloc(sizeof(*flen) * n);
 				for (i = 0; i < n; ++i) { /* static member names */
 					ofs = decodeStr(&key, &klen, 0, buf, pos, size, 0, sht TSRMLS_CC);
 					if (ofs < 0) {
-						while (i--) efree(fld[i]);
-						efree(fld);
-						efree(flen);
-						return -1;
+						n = -1;
+						break;
 					}
 					pos += ofs;
+					if (!klen || !key[0]) {
+						php_error(E_WARNING, "Inappropriate class member name at position %d", pos);
+						n = -1;
+						break;
+					}
 					fld[i] = estrndup(key, klen); /* a trailing \0 is needed later for a key string */
 					flen[i] = klen + 1;
+				}
+				if (n < 0) {
+					while (i--) efree(fld[i]);
+					efree(fld);
+					efree(flen);
+					return -1;
 				}
 			}
 			tr = emalloc(sizeof(Traits));
