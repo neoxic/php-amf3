@@ -84,6 +84,10 @@ http://download.macromedia.com/pub/labs/amf/amf3_spec_121207.pdf
 History
 -------
 
+Version 1.2.1 [18/Mar/2013]
++ Important security fixes
++ Minor fixes (build files, tests, README)
+
 Version 1.2.0 [03/Mar/2013]
 + Option to force encoding non-dense arrays as anonymous objects.
 + Option to perform automatic class mapping in the decoder.
