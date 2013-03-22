@@ -77,7 +77,13 @@ Usage constraints
   associative arrays; otherwise, they are represented as objects of the
   corresponding PHP classes.
 
-Official Adobe AMF3 specification is available here:
+
+Links
+-----
+
+Project homepage: http://neoxic.me/php-amf3/
+
+Official Adobe AMF3 specification:
 http://download.macromedia.com/pub/labs/amf/amf3_spec_121207.pdf
 
 
