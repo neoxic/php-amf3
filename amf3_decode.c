@@ -15,7 +15,7 @@
 
 typedef struct {
 	int fmt, cnt;
-	const char *cls;
+	char *cls;
 	int clen;
 	char **fld;
 	int *flen;
@@ -220,8 +220,8 @@ static int decodeObject(zval **val, const char* buf, int pos, int size, int opts
 			int i, n = pfx >> 2;
 			const char *cls;
 			int clen;
-			char **fld = 0;
-			int *flen = 0;
+			char **fld;
+			int *flen;
 			ofs = decodeStr(&cls, &clen, 0, buf, pos, size, 0, sht TSRMLS_CC);
 			if (ofs < 0) return -1;
 			pos += ofs;
@@ -257,7 +257,7 @@ static int decodeObject(zval **val, const char* buf, int pos, int size, int opts
 			tr = emalloc(sizeof(Traits));
 			tr->fmt = pfx & 0x03;
 			tr->cnt = n;
-			tr->cls = cls;
+			tr->cls = estrndup(cls, clen);
 			tr->clen = clen;
 			tr->fld = fld;
 			tr->flen = flen;
@@ -347,7 +347,7 @@ static int decodeObject(zval **val, const char* buf, int pos, int size, int opts
 				}
 			}
 		}
-		if (!(opts & AMF3_CLASS_MAP) && tr->clen) add_assoc_stringl(*val, "_class", (char *)tr->cls, tr->clen, 1);
+		if (!(opts & AMF3_CLASS_MAP) && tr->clen) add_assoc_stringl(*val, "_class", tr->cls, tr->clen, 1);
 		else if (ce && (opts & AMF3_CLASS_CONSTRUCT)) { /* call the constructor */
 			zend_call_method_with_0_params(val, ce, &ce->constructor, NULL, NULL);
 			if (EG(exception)) return -1;
@@ -437,6 +437,7 @@ static void traitsPtrDtor(void *p) {
 		efree(tr->fld);
 		efree(tr->flen);
 	}
+	efree(tr->cls);
 	efree(tr);
 }
 
