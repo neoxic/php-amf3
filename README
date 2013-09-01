@@ -90,6 +90,9 @@ http://download.macromedia.com/pub/labs/amf/amf3_spec_121207.pdf
 History
 -------
 
+Version 1.2.2 [31/Aug/2013]
++ Minor error reporting fixes
+
 Version 1.2.1 [18/Mar/2013]
 + Important security fixes
 + Minor fixes (build files, tests, README)
