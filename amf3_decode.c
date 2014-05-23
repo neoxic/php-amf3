@@ -25,7 +25,8 @@ typedef struct {
 static int decodeValue(zval **val, const char *buf, int pos, int size, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC);
 
 static int decodeU29(int *val, const char *buf, int pos, int size TSRMLS_DC) {
-	int ofs = 0, res = 0, tmp;
+	int ofs = 0, res = 0;
+	unsigned char tmp;
 	buf += pos;
 	do {
 		if ((pos + ofs) >= size) {
@@ -35,7 +36,7 @@ static int decodeU29(int *val, const char *buf, int pos, int size TSRMLS_DC) {
 		tmp = buf[ofs];
 		if (ofs == 3) {
 			res <<= 8;
-			res |= tmp & 0xff;
+			res |= tmp;
 		} else {
 			res <<= 7;
 			res |= tmp & 0x7f;
