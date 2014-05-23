@@ -25,25 +25,25 @@ typedef struct {
 static int decodeValue(zval **val, const char *buf, int pos, int size, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC);
 
 static int decodeU29(int *val, const char *buf, int pos, int size TSRMLS_DC) {
-	int ofs = 0, res = 0;
-	unsigned char tmp;
+	int res = 0, n = 0;
+	unsigned char b;
 	buf += pos;
 	do {
-		if ((pos + ofs) >= size) {
+		if ((pos + n) >= size) {
 			php_error(E_WARNING, "Insufficient integer data at position %d", pos);
 			return -1;
 		}
-		tmp = buf[ofs];
-		if (ofs == 3) {
+		b = buf[n++];
+		if (n == 4) {
 			res <<= 8;
-			res |= tmp;
-		} else {
-			res <<= 7;
-			res |= tmp & 0x7f;
+			res |= b;
+			break;
 		}
-	} while ((++ofs < 4) && (tmp & 0x80));
+		res <<= 7;
+		res |= b & 0x7f;
+	} while (b & 0x80);
 	*val = res;
-	return ofs;
+	return n;
 }
 
 static int decodeDouble(double *val, const char *buf, int pos, int size TSRMLS_DC) {
@@ -114,7 +114,7 @@ static int decodeString(const char **str, int *len, zval **val, const char *buf,
 }
 
 static int decodeRef(int *len, zval **val, const char *buf, int pos, int size, HashTable *ht TSRMLS_DC) {
-	int ofs, pfx, def;
+	int old = pos, ofs, pfx, def;
 	ofs = decodeU29(&pfx, buf, pos, size TSRMLS_CC);
 	if (ofs < 0) return -1;
 	pos += ofs;
@@ -131,7 +131,7 @@ static int decodeRef(int *len, zval **val, const char *buf, int pos, int size, H
 		*val = *hv;
 		Z_ADDREF_PP(hv);
 	}
-	return ofs;
+	return pos - old;
 }
 
 static void storeRef(zval *val, HashTable *ht) {
