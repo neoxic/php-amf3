@@ -64,7 +64,7 @@ static int decodeDouble(double *val, const char *buf, int pos, int size TSRMLS_D
 	return 8;
 }
 
-static int decodeString(const char **str, int *len, zval **val, const char *buf, int pos, int size, int loose, HashTable *ht TSRMLS_DC) {
+static int decodeString(const char **str, int *len, zval **val, const char *buf, int pos, int size, HashTable *ht, int blob TSRMLS_DC) {
 	int old = pos, ofs, pfx, def;
 	ofs = decodeU29(&pfx, buf, pos, size TSRMLS_CC);
 	if (ofs < 0) return -1;
@@ -85,7 +85,7 @@ static int decodeString(const char **str, int *len, zval **val, const char *buf,
 			ZVAL_RESET(*val);
 			ZVAL_STRINGL(*val, buf, pfx, 1);
 		}
-		if (loose || pfx) { /* empty string is never sent by reference */
+		if (blob || pfx) { /* empty string is never sent by reference */
 			zval *hv;
 			if (val) {
 				hv = *val;
@@ -170,7 +170,7 @@ static int decodeArray(zval **val, const char *buf, int pos, int size, int opts,
 		array_init(*val);
 		storeRef(*val, oht);
 		for ( ;; ) { /* associative portion */
-			ofs = decodeString(&key, &klen, 0, buf, pos, size, 0, sht TSRMLS_CC);
+			ofs = decodeString(&key, &klen, 0, buf, pos, size, sht, 0 TSRMLS_CC);
 			if (ofs < 0) return -1;
 			pos += ofs;
 			if (!klen) break;
@@ -224,7 +224,7 @@ static int decodeObject(zval **val, const char *buf, int pos, int size, int opts
 			int clen;
 			char **fld;
 			int *flen;
-			ofs = decodeString(&cls, &clen, 0, buf, pos, size, 0, sht TSRMLS_CC);
+			ofs = decodeString(&cls, &clen, 0, buf, pos, size, sht, 0 TSRMLS_CC);
 			if (ofs < 0) return -1;
 			pos += ofs;
 			if (n > 0) {
@@ -235,7 +235,7 @@ static int decodeObject(zval **val, const char *buf, int pos, int size, int opts
 				fld = emalloc(sizeof(*fld) * n);
 				flen = emalloc(sizeof(*flen) * n);
 				for (i = 0; i < n; ++i) { /* static member names */
-					ofs = decodeString(&key, &klen, 0, buf, pos, size, 0, sht TSRMLS_CC);
+					ofs = decodeString(&key, &klen, 0, buf, pos, size, sht, 0 TSRMLS_CC);
 					if (ofs < 0) {
 						n = -1;
 						break;
@@ -317,7 +317,7 @@ static int decodeObject(zval **val, const char *buf, int pos, int size, int opts
 			}
 			if (tr->fmt & 2) { /* dynamic */
 				for ( ;; ) {
-					ofs = decodeString(&key, &klen, 0, buf, pos, size, 0, sht TSRMLS_CC);
+					ofs = decodeString(&key, &klen, 0, buf, pos, size, sht, 0 TSRMLS_CC);
 					if (ofs < 0) return -1;
 					pos += ofs;
 					if (!klen) break;
@@ -402,14 +402,14 @@ static int decodeValue(zval **val, const char *buf, int pos, int size, int opts,
 			break;
 		}
 		case AMF3_STRING:
-			ofs = decodeString(0, 0, val, buf, pos, size, 0, sht TSRMLS_CC);
+			ofs = decodeString(0, 0, val, buf, pos, size, sht, 0 TSRMLS_CC);
 			if (ofs < 0) return -1;
 			pos += ofs;
 			break;
 		case AMF3_XML:
 		case AMF3_XMLDOC:
 		case AMF3_BYTEARRAY:
-			ofs = decodeString(0, 0, val, buf, pos, size, 1, oht TSRMLS_CC);
+			ofs = decodeString(0, 0, val, buf, pos, size, oht, 1 TSRMLS_CC);
 			if (ofs < 0) return -1;
 			pos += ofs;
 			break;
