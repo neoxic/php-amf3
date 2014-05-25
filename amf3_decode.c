@@ -99,7 +99,7 @@ static int decodeString(const char **str, int *len, zval **val, const char *buf,
 	} else {
 		zval **hv;
 		if (zend_hash_index_find(ht, pfx, (void **)&hv) == FAILURE) {
-			php_error(E_WARNING, "Missing string reference #%d at position %d", pfx, pos);
+			php_error(E_WARNING, "Missing reference #%d at position %d", pfx, pos);
 			return -1;
 		}
 		if (str && len) {
@@ -124,7 +124,7 @@ static int decodeRef(int *len, zval **val, const char *buf, int pos, int size, H
 	else {
 		zval **hv;
 		if (zend_hash_index_find(ht, pfx, (void **)&hv) == FAILURE) {
-			php_error(E_WARNING, "Missing object reference #%d at position %d", pfx, pos);
+			php_error(E_WARNING, "Missing reference #%d at position %d", pfx, pos);
 			return -1;
 		}
 		*len = -1;
