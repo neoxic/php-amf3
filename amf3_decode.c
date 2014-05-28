@@ -101,7 +101,7 @@ static int decodeString(const char *buf, int pos, int size, const char **str, in
 	pfx >>= 1;
 	if (def) {
 		if ((pos + pfx) > size) {
-			php_error(E_WARNING, "Insufficient data of length %d at position %d", pfx, pos);
+			php_error(E_WARNING, "Invalid length %d at position %d", pfx, old);
 			return -1;
 		}
 		buf += pos;
@@ -127,7 +127,7 @@ static int decodeString(const char *buf, int pos, int size, const char **str, in
 	} else {
 		zval **hv;
 		if (zend_hash_index_find(ht, pfx, (void **)&hv) == FAILURE) {
-			php_error(E_WARNING, "Invalid reference %d at position %d", pfx, pos);
+			php_error(E_WARNING, "Invalid reference %d at position %d", pfx, old);
 			return -1;
 		}
 		if (str && len) {
@@ -152,7 +152,7 @@ static int decodeRef(const char *buf, int pos, int size, int *num, zval **val, H
 	else {
 		zval **hv;
 		if (zend_hash_index_find(ht, pfx, (void **)&hv) == FAILURE) {
-			php_error(E_WARNING, "Invalid reference %d at position %d", pfx, pos);
+			php_error(E_WARNING, "Invalid reference %d at position %d", pfx, old);
 			return -1;
 		}
 		*num = -1;
@@ -244,12 +244,12 @@ static int decodeObject(const char *buf, int pos, int size, zval **val, int opts
 			int clen;
 			char **fld;
 			int *flen;
-			ofs = decodeString(buf, pos, size, &cls, &clen, 0, sht, 0 TSRMLS_CC);
+			ofs = decodeString(buf, pos, size, &cls, &clen, 0, sht, 0 TSRMLS_CC); /* Class name */
 			if (ofs < 0) return -1;
 			pos += ofs;
 			if (n > 0) {
 				if ((pos + n * 2) > size) { /* Rough security check */
-					php_error(E_WARNING, "Invalid number of class members at position %d", pos);
+					php_error(E_WARNING, "Invalid number of class members at position %d", old);
 					return -1;
 				}
 				fld = emalloc(n * sizeof *fld);
@@ -262,7 +262,7 @@ static int decodeObject(const char *buf, int pos, int size, zval **val, int opts
 					}
 					pos += ofs;
 					if (!klen || !key[0]) {
-						php_error(E_WARNING, "Invalid class member name at position %d", pos);
+						php_error(E_WARNING, "Invalid class member name at position %d", pos - ofs);
 						n = -1;
 						break;
 					}
@@ -287,7 +287,7 @@ static int decodeObject(const char *buf, int pos, int size, zval **val, int opts
 		} else { /* Existing class definition */
 			Traits **trp;
 			if (zend_hash_index_find(tht, pfx, (void **)&trp) == FAILURE) {
-				php_error(E_WARNING, "Invalid class reference %d at position %d", pfx, pos);
+				php_error(E_WARNING, "Invalid class reference %d at position %d", pfx, old);
 				return -1;
 			}
 			tr = *trp;
@@ -301,7 +301,7 @@ static int decodeObject(const char *buf, int pos, int size, zval **val, int opts
 				if (!(opts & AMF3_CLASS_AUTOLOAD)) mode |= ZEND_FETCH_CLASS_NO_AUTOLOAD;
 				ce = zend_fetch_class(tr->cls, tr->clen, mode TSRMLS_CC);
 				if (!ce) {
-					php_error(E_WARNING, "Class '%s' not found at position %d", tr->cls, pos);
+					php_error(E_WARNING, "Class '%s' not found at position %d", tr->cls, old);
 					return -1;
 				}
 				object_init_ex(*val, ce);
@@ -342,7 +342,7 @@ static int decodeObject(const char *buf, int pos, int size, zval **val, int opts
 					pos += ofs;
 					if (!klen) break;
 					if (map && !key[0]) {
-						php_error(E_WARNING, "Invalid class member name at position %d", pos);
+						php_error(E_WARNING, "Invalid class member name at position %d", pos - ofs);
 						return -1;
 					}
 					hv = 0;
@@ -440,7 +440,7 @@ static int decodeValue(const char *buf, int pos, int size, zval **val, int opts,
 			pos += ofs;
 			break;
 		default:
-			php_error(E_WARNING, "Unsupported value of type %d at position %d", buf[pos - 1], pos);
+			php_error(E_WARNING, "Unsupported value type %d at position %d", buf[old], old);
 			return -1;
 	}
 	return pos - old;
