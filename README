@@ -15,7 +15,7 @@ string amf3_encode(mixed $value [, $options = 0 ])
 - The $options argument is a bitmask of options. The following bit constants
   are available in a PHP script:
     AMF3_FORCE_OBJECT
-      Force encoding non-dense arrays as anonymous objects.
+      Force encoding non-indexed arrays as anonymous objects.
 
 mixed amf3_decode(string $amf3 [, int &$count [, $options = 0 ]])
 
@@ -63,19 +63,18 @@ make test
 Usage constraints
 -----------------
 
-- PHP NULL, boolean, integer, float (double), string, array and object values
+- PHP NULL, boolean, integer, float (double), string, array, and object values
   are fully convertible back and forth to their corresponding AMF3 types.
-- AMF3 Date becomes a float value whereas XML, XMLDocument and ByteArray
+- AMF3 Date becomes a float value whereas XML, XMLDocument, and ByteArray
   become strings.
 - In a special case, PHP integers are converted into AMF3 doubles according
   to the specification (see the link below).
-- A PHP array is encoded as a dense array when it has ascending integer keys
+- A PHP array is encoded as an indexed array when it has ascending integer keys
   that start with zero and have no gaps. An empty array adheres to this rule.
-  In all other cases, an array is considered non-dense and encoded as a purely
+  In all other cases, an array is considered non-indexed and encoded as a purely
   associative array to avoid ambiguity.
 - When class mapping is disabled (the default), AMF3 objects are returned as
-  associative arrays; otherwise, they are represented as objects of the
-  corresponding PHP classes.
+  associative arrays; otherwise, they are returned as objects.
 
 
 Links
@@ -83,8 +82,7 @@ Links
 
 Project homepage: http://neoxic.me/php-amf3/
 
-Official Adobe AMF3 specification:
-http://download.macromedia.com/pub/labs/amf/amf3_spec_121207.pdf
+Official Adobe AMF3 specification: http://www.adobe.com/go/amfspec
 
 
 History
