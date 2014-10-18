@@ -88,21 +88,21 @@ Official Adobe AMF3 specification: http://www.adobe.com/go/amfspec
 History
 -------
 
-Version 1.2.2 [31/Aug/2013]
+Version 1.2.2 [2013-08-31]
 + Minor error reporting fixes
 
-Version 1.2.1 [18/Mar/2013]
+Version 1.2.1 [2013-03-18]
 + Important security fixes
 + Minor fixes (build files, tests, README)
 
-Version 1.2.0 [03/Mar/2013]
+Version 1.2.0 [2013-03-03]
 + Option to force encoding non-dense arrays as anonymous objects.
 + Option to perform automatic class mapping in the decoder.
 
-Version 1.1.0 [20/Feb/2013]
+Version 1.1.0 [2013-02-20]
 + Support for previously unsupported AMF3 types.
 + Major code revision.
 + License changed from GPL to MIT.
 
-Version 1.0.0 [03/Feb/2010]
+Version 1.0.0 [2010-02-03]
 + Encoding/decoding of basic PHP/AMF3 values.

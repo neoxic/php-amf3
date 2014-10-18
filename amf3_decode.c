@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2010, 2013 Arseny Vakhrushev <arseny.vakhrushev at gmail dot com>
+** Copyright (C) 2010, 2013-2014 Arseny Vakhrushev <arseny.vakhrushev at gmail dot com>
 ** Please read the LICENSE file for license details
 */
 
@@ -9,7 +9,7 @@
 
 #include "php.h"
 #include "php_amf3.h"
-#include "Zend/zend_interfaces.h"
+#include "zend_interfaces.h"
 #include "amf3.h"
 
 
