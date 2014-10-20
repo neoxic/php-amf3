@@ -88,6 +88,10 @@ Official Adobe AMF3 specification: http://www.adobe.com/go/amfspec
 History
 -------
 
+Version 1.2.3 [2014-10-19]
++ Support for previously unsupported AMF3 types
++ Error reporting fixes
+
 Version 1.2.2 [2013-08-31]
 + Minor error reporting fixes
 
