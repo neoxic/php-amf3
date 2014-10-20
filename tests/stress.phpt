@@ -159,6 +159,17 @@ $strs = array(
 	.	"\x0a\x04" // Object (reference 2)
 	.	"\x0a\x06" // Object (reference 3)
 	.	"\x0a\x08" // Object (reference 4)
+	,
+	// Vector
+	"\x09\x11\x01" // Array (length 8)
+	.	"\x0d\x05\x00\x00\x01\x02\x03\xff\xff\xff\xff" // Vector of ints [66051, -1]
+	.	"\x0e\x05\x00\x00\x01\x02\x03\xff\xff\xff\xff" // Vector of uints [66051, 4294967295]
+	.	"\x0f\x05\x00\x3f\xb9\x99\x99\x99\x99\x99\x9a\x3f\xc9\x99\x99\x99\x99\x99\x9a" // Vector of doubles [0.1, 0.2]
+	.	"\x10\x07\x01\x03\x2a\x02\x03\x04\x00" // Vector of objects (type '*') [false, true, 0]
+	.	"\x0d\x02" // Vector of ints (reference 1)
+	.	"\x0e\x04" // Vector of uints (reference 2)
+	.	"\x0f\x06" // Vector of doubles (reference 3)
+	.	"\x10\x08" // Vector of objects (reference 4)
 );
 
 $ba = "\x11\x22\x33";
@@ -167,10 +178,15 @@ $o1 = array('A' => 1, 'B' => 2, 'C' => 3, 'D' => 4, 'E' => 5, '_class' => 'ABC')
 $o2 = array('A' => null, 'B' => false, 'C' => true, 'F' => true, '_class' => 'ABC');
 $o3 = array('_data' => false, '_class' => 'DEF');
 $o4 = array('_data' => true, '_class' => 'DEF');
+$vi = array(66051, -1);
+$vu = array(66051, (int)4294967295); // Type cast makes 32-bit systems happy
+$vd = array(0.1, 0.2);
+$vo = array(false, true, 0);
 $objs = array(
 	array(0.1, 'ABC', 'DEF', $ba, 0.1, 'ABC', 'DEF', $ba),
 	array($ma, $ma),
 	array($o1, $o2, $o3, $o4, $o1, $o2, $o3, $o4),
+	array($vi, $vu, $vd, $vo, $vi, $vu, $vd, $vo),
 );
 
 for ($i = 0; $i < count($strs); ++$i) {

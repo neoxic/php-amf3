@@ -41,6 +41,15 @@ static void traitsPtrDtor(void *p) {
 
 static int decodeValue(const char *buf, int pos, int size, zval **val, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC);
 
+static int decodeU8(const char *buf, int pos, int size, unsigned char *val TSRMLS_DC) {
+	if (pos >= size) {
+		php_error(E_WARNING, "Insufficient U8 data at position %d", pos);
+		return -1;
+	}
+	*val = buf[pos];
+	return 1;
+}
+
 static int decodeU29(const char *buf, int pos, int size, int *val TSRMLS_DC) {
 	int n = 0, ofs = 0;
 	unsigned char b;
@@ -71,6 +80,28 @@ static int decodeInteger(const char *buf, int pos, int size, zval **val TSRMLS_D
 	ZVAL_RESET(*val);
 	ZVAL_LONG(*val, n);
 	return ofs;
+}
+
+static int decodeU32(const char *buf, int pos, int size, zval **val, int sign TSRMLS_DC) {
+	union { int n; char c; } t;
+	union { unsigned n; char c[4]; } u;
+	long n;
+	if ((pos + 4) > size) {
+		php_error(E_WARNING, "Insufficient U32 data at position %d", pos);
+		return -1;
+	}
+	buf += pos;
+	t.n = 1;
+	if (!t.c) memcpy(u.c, buf, 4);
+	else { /* Little-endian machine */
+		int i;
+		for (i = 0; i < 4; ++i) u.c[i] = buf[3 - i];
+	}
+	if (sign) n = (signed)u.n;
+	else n = u.n;
+	ZVAL_RESET(*val);
+	ZVAL_LONG(*val, n);
+	return 4;
 }
 
 static int decodeDouble(const char *buf, int pos, int size, zval **val TSRMLS_DC) {
@@ -382,13 +413,64 @@ static int decodeObject(const char *buf, int pos, int size, zval **val, int opts
 	return pos - old;
 }
 
+static int decodeVectorItem(const char *buf, int pos, int size, zval **val, int opts, HashTable *sht, HashTable *oht, HashTable *tht, int type TSRMLS_DC) {
+	switch (type) {
+		case AMF3_VECTOR_INT:
+			return decodeU32(buf, pos, size, val, 1 TSRMLS_CC);
+		case AMF3_VECTOR_UINT:
+			return decodeU32(buf, pos, size, val, 0 TSRMLS_CC);
+		case AMF3_VECTOR_DOUBLE:
+			return decodeDouble(buf, pos, size, val TSRMLS_CC);
+		case AMF3_VECTOR_OBJECT:
+			return decodeValue(buf, pos, size, val, opts, sht, oht, tht TSRMLS_CC);
+		default:
+			return -1;
+	}
+}
+
+static int decodeVector(const char *buf, int pos, int size, zval **val, int opts, HashTable *sht, HashTable *oht, HashTable *tht, int type TSRMLS_DC) {
+	int old = pos, ofs, len;
+	ofs = decodeRef(buf, pos, size, &len, val, oht TSRMLS_CC);
+	if (ofs < 0) return -1;
+	pos += ofs;
+	if (len != -1) {
+		zval *hv;
+		unsigned char fv;
+		ZVAL_RESET(*val);
+		array_init(*val);
+		storeRef(oht, *val);
+		ofs = decodeU8(buf, pos, size, &fv TSRMLS_CC); /* 'fixed-vector' marker */
+		if (ofs < 0) return -1;
+		pos += ofs;
+		if (type == AMF3_VECTOR_OBJECT) { /* 'object-type-name' marker */
+			ofs = decodeString(buf, pos, size, 0, 0, 0, sht, 0 TSRMLS_CC);
+			if (ofs < 0) return -1;
+			pos += ofs;
+		}
+		while (len--) {
+			hv = 0;
+			ofs = decodeVectorItem(buf, pos, size, &hv, opts, sht, oht, tht, type TSRMLS_CC);
+			if (hv) add_next_index_zval(*val, hv);
+			if (ofs < 0) return -1;
+			pos += ofs;
+		}
+	}
+	return pos - old;
+}
+
+static int decodeDictionary(const char *buf, int pos, int size, zval **val, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
+	/* No support for dictionary in PHP */
+	php_error(E_WARNING, "Unsupported 'Dictionary' value at position %d", pos);
+	return -1;
+}
+
 static int decodeValue(const char *buf, int pos, int size, zval **val, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
 	int old = pos, ofs;
-	if (pos >= size) {
-		php_error(E_WARNING, "Insufficient type data at position %d", pos);
-		return -1;
-	}
-	switch (buf[pos++]) {
+	unsigned char type;
+	ofs = decodeU8(buf, pos, size, &type TSRMLS_CC);
+	if (ofs < 0) return -1;
+	pos += ofs;
+	switch (type) {
 		case AMF3_UNDEFINED:
 		case AMF3_NULL:
 			ZVAL_RESET(*val);
@@ -439,8 +521,21 @@ static int decodeValue(const char *buf, int pos, int size, zval **val, int opts,
 			if (ofs < 0) return -1;
 			pos += ofs;
 			break;
+		case AMF3_VECTOR_INT:
+		case AMF3_VECTOR_UINT:
+		case AMF3_VECTOR_DOUBLE:
+		case AMF3_VECTOR_OBJECT:
+			ofs = decodeVector(buf, pos, size, val, opts, sht, oht, tht, type TSRMLS_CC);
+			if (ofs < 0) return -1;
+			pos += ofs;
+			break;
+		case AMF3_DICTIONARY:
+			ofs = decodeDictionary(buf, pos, size, val, opts, sht, oht, tht TSRMLS_CC);
+			if (ofs < 0) return -1;
+			pos += ofs;
+			break;
 		default:
-			php_error(E_WARNING, "Unsupported value type %d at position %d", buf[old], old);
+			php_error(E_WARNING, "Invalid value type %d at position %d", type, old);
 			return -1;
 	}
 	return pos - old;
