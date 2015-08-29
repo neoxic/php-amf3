@@ -119,20 +119,17 @@ static void encodeHash(smart_str *ss, HashTable *ht, int opts, HashTable *sht, H
 	smart_str_appendc(ss, 0x01);
 }
 
-static void encodeArray(smart_str *ss, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
+static void encodeArray(smart_str *ss, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht, int len TSRMLS_DC) {
 	HashTable *ht = Z_ARRVAL_P(val);
 	HashPosition hp;
 	zval **hv;
-	int len;
 	if (encodeRef(ss, val, oht TSRMLS_CC)) return;
-	len = getHashLen(ht);
 	if (len != -1) { /* Encode as dense array */
 		if (len > AMF3_MAX_INT) len = AMF3_MAX_INT;
 		encodeU29(ss, (len << 1) | 1);
 		smart_str_appendc(ss, 0x01);
 		for (zend_hash_internal_pointer_reset_ex(ht, &hp) ;; zend_hash_move_forward_ex(ht, &hp)) {
 			if (zend_hash_get_current_data_ex(ht, (void **)&hv, &hp) != SUCCESS) break;
-			if (!len--) break;
 			encodeValue(ss, *hv, opts, sht, oht, tht TSRMLS_CC);
 		}
 	} else { /* Encode as associative array */
@@ -186,12 +183,15 @@ static void encodeValue(smart_str *ss, zval *val, int opts, HashTable *sht, Hash
 			smart_str_appendc(ss, AMF3_STRING);
 			encodeString(ss, Z_STRVAL_P(val), Z_STRLEN_P(val), sht TSRMLS_CC);
 			break;
-		case IS_ARRAY:
-			if (!(opts & AMF3_FORCE_OBJECT) || (getHashLen(Z_ARRVAL_P(val)) != -1)) {
+		case IS_ARRAY: {
+			int len = getHashLen(Z_ARRVAL_P(val));
+			if (!(opts & AMF3_FORCE_OBJECT) || (len != -1)) {
 				smart_str_appendc(ss, AMF3_ARRAY);
-				encodeArray(ss, val, opts, sht, oht, tht TSRMLS_CC);
+				encodeArray(ss, val, opts, sht, oht, tht, len TSRMLS_CC);
 				break;
-			} /* Fall through; encode array as object */
+			}
+			/* Fall through; encode array as object */
+		}
 		case IS_OBJECT:
 			smart_str_appendc(ss, AMF3_OBJECT);
 			encodeObject(ss, val, opts, sht, oht, tht TSRMLS_CC);
