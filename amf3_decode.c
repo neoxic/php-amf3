@@ -279,8 +279,8 @@ static int decodeObject(const char *buf, int pos, int size, zval **val, int opts
 			if (ofs < 0) return -1;
 			pos += ofs;
 			if (n > 0) {
-				if ((pos + n * 2) > size) { /* Rough security check */
-					php_error(E_WARNING, "Invalid number of class members at position %d", old);
+				if ((pos + n) > size) {
+					php_error(E_WARNING, "Invalid number of class members %d at position %d", n, old);
 					return -1;
 				}
 				fld = emalloc(n * sizeof *fld);
@@ -308,7 +308,7 @@ static int decodeObject(const char *buf, int pos, int size, zval **val, int opts
 				}
 			}
 			tr = emalloc(sizeof(Traits));
-			tr->fmt = pfx & 0x03;
+			tr->fmt = pfx & 3;
 			tr->cnt = n;
 			tr->cls = estrndup(cls, clen);
 			tr->clen = clen;
@@ -436,9 +436,6 @@ static int decodeVector(const char *buf, int pos, int size, zval **val, int opts
 	if (len != -1) {
 		zval *hv;
 		unsigned char fv;
-		ZVAL_RESET(*val);
-		array_init(*val);
-		storeRef(oht, *val);
 		ofs = decodeU8(buf, pos, size, &fv TSRMLS_CC); /* 'fixed-vector' marker */
 		if (ofs < 0) return -1;
 		pos += ofs;
@@ -447,6 +444,9 @@ static int decodeVector(const char *buf, int pos, int size, zval **val, int opts
 			if (ofs < 0) return -1;
 			pos += ofs;
 		}
+		ZVAL_RESET(*val);
+		array_init(*val);
+		storeRef(oht, *val);
 		while (len--) {
 			hv = 0;
 			ofs = decodeVectorItem(buf, pos, size, &hv, opts, sht, oht, tht, type TSRMLS_CC);
