@@ -132,7 +132,7 @@ static int decodeString(const char *buf, int pos, int size, const char **str, in
 	pfx >>= 1;
 	if (def) {
 		if ((pos + pfx) > size) {
-			php_error(E_WARNING, "Invalid length %d at position %d", pfx, old);
+			php_error(E_WARNING, "Invalid string length %d at position %d", pfx, old);
 			return -1;
 		}
 		buf += pos;
@@ -158,7 +158,7 @@ static int decodeString(const char *buf, int pos, int size, const char **str, in
 	} else {
 		zval **hv;
 		if (zend_hash_index_find(ht, pfx, (void **)&hv) == FAILURE) {
-			php_error(E_WARNING, "Invalid reference %d at position %d", pfx, old);
+			php_error(E_WARNING, "Invalid string reference %d at position %d", pfx, old);
 			return -1;
 		}
 		if (str && len) {
@@ -183,7 +183,7 @@ static int decodeRef(const char *buf, int pos, int size, int *num, zval **val, H
 	else {
 		zval **hv;
 		if (zend_hash_index_find(ht, pfx, (void **)&hv) == FAILURE) {
-			php_error(E_WARNING, "Invalid reference %d at position %d", pfx, old);
+			php_error(E_WARNING, "Invalid object reference %d at position %d", pfx, old);
 			return -1;
 		}
 		*num = -1;
