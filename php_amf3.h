@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2010, 2013-2014 Arseny Vakhrushev <arseny.vakhrushev at gmail dot com>
+** Copyright (C) 2010, 2013-2016 Arseny Vakhrushev <arseny.vakhrushev at gmail dot com>
 ** Please read the LICENSE file for license details
 */
 
@@ -7,7 +7,7 @@
 #define PHP_AMF3_H
 
 
-#define PHP_AMF3_VERSION "1.2.3"
+#define PHP_AMF3_VERSION "2.0.0-beta1"
 
 extern zend_module_entry amf3_module_entry;
 #define phpext_amf3_ptr &amf3_module_entry

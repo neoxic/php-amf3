@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2010, 2013-2014 Arseny Vakhrushev <arseny.vakhrushev at gmail dot com>
+** Copyright (C) 2010, 2013-2016 Arseny Vakhrushev <arseny.vakhrushev at gmail dot com>
 ** Please read the LICENSE file for license details
 */
 
@@ -9,24 +9,9 @@
 
 #include "php.h"
 #include "php_amf3.h"
-#include "ext/standard/php_smart_str.h"
+#include "zend_smart_str.h"
 #include "amf3.h"
 
-
-static int getHashLen(HashTable *ht) {
-	HashPosition hp;
-	char *key;
-	uint klen;
-	ulong idx;
-	int ktype, len = 0;
-	for (zend_hash_internal_pointer_reset_ex(ht, &hp) ;; zend_hash_move_forward_ex(ht, &hp)) {
-		ktype = zend_hash_get_current_key_ex(ht, &key, &klen, &idx, 0, &hp);
-		if (ktype == HASH_KEY_NON_EXISTANT) break;
-		if ((ktype != HASH_KEY_IS_LONG) || (idx != len)) return -1;
-		++len;
-	}
-	return len;
-}
 
 static void encodeValue(smart_str *ss, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC);
 
@@ -70,68 +55,58 @@ static void encodeDouble(smart_str *ss, double val) {
 	smart_str_appendl(ss, buf, 8);
 }
 
-static void encodeString(smart_str *ss, const char *str, int len, HashTable *ht TSRMLS_DC) {
-	if (len > AMF3_MAX_INT) len = AMF3_MAX_INT;
-	if (len) { /* Empty string is never sent by reference */
-		int *oidx, nidx;
-		if (zend_hash_find(ht, str, len, (void **)&oidx) == SUCCESS) {
-			encodeU29(ss, *oidx << 1);
-			return;
-		}
-		nidx = zend_hash_num_elements(ht);
-		if (nidx <= AMF3_MAX_INT) zend_hash_add(ht, str, len, &nidx, sizeof(nidx), NULL);
-	}
-	encodeU29(ss, (len << 1) | 1);
-	smart_str_appendl(ss, str, len);
-}
-
-static int encodeRef(smart_str *ss, zval *val, HashTable *ht TSRMLS_DC) {
+static int encodeRefEx(smart_str *ss, const char *str, size_t len, HashTable *ht TSRMLS_DC) {
 	int *oidx, nidx;
-	if (zend_hash_find(ht, (char *)&val, sizeof(val), (void **)&oidx) == SUCCESS) {
+	if ((oidx = zend_hash_str_find_ptr(ht, str, len))) {
 		encodeU29(ss, *oidx << 1);
 		return 1;
 	}
 	nidx = zend_hash_num_elements(ht);
-	if (nidx <= AMF3_MAX_INT) zend_hash_add(ht, (char *)&val, sizeof(val), &nidx, sizeof(nidx), NULL);
+	if (nidx <= AMF3_MAX_INT) zend_hash_str_add_mem(ht, str, len, &nidx, sizeof(nidx));
 	return 0;
 }
 
+static int encodeRef(smart_str *ss, void *ptr, HashTable *ht TSRMLS_DC) {
+	return encodeRefEx(ss, (char *)&ptr, sizeof(ptr), ht TSRMLS_CC);
+}
+
+static void encodeString(smart_str *ss, const char *str, size_t len, HashTable *ht TSRMLS_DC) {
+	if (len > AMF3_MAX_INT) len = AMF3_MAX_INT;
+	if (len && encodeRefEx(ss, str, len, ht TSRMLS_CC)) return; /* Empty string is never sent by reference */
+	encodeU29(ss, (len << 1) | 1);
+	smart_str_appendl(ss, str, len);
+}
+
 static void encodeHash(smart_str *ss, HashTable *ht, int opts, HashTable *sht, HashTable *oht, HashTable *tht, int prv TSRMLS_DC) {
-	HashPosition hp;
-	zval **hv;
-	char *key, kbuf[22];
-	uint klen;
-	ulong idx;
-	for (zend_hash_internal_pointer_reset_ex(ht, &hp) ;; zend_hash_move_forward_ex(ht, &hp)) {
-		if (zend_hash_get_current_data_ex(ht, (void **)&hv, &hp) != SUCCESS) break;
-		switch (zend_hash_get_current_key_ex(ht, &key, &klen, &idx, 0, &hp)) {
-			case HASH_KEY_IS_STRING:
-				if (klen <= 1) continue; /* Empty key can't be represented in AMF3 */
-				if (prv && !key[0]) continue; /* Skip private/protected property */
-				encodeString(ss, key, klen - 1, sht TSRMLS_CC);
-				break;
-			case HASH_KEY_IS_LONG:
-				encodeString(ss, kbuf, sprintf(kbuf, "%ld", idx), sht TSRMLS_CC);
-				break;
+	zend_ulong idx;
+	zend_string *key;
+	zval *val;
+	ZEND_HASH_FOREACH_KEY_VAL(ht, idx, key, val) {
+		if (key) {
+			const char *str = ZSTR_VAL(key);
+			size_t len = ZSTR_LEN(key);
+			if (!len) continue; /* Empty key can't be represented in AMF3 */
+			if (prv && !str[0]) continue; /* Skip private/protected property */
+			encodeString(ss, str, len, sht TSRMLS_CC);
+		} else {
+			char buf[22];
+			encodeString(ss, buf, sprintf(buf, "%ld", idx), sht TSRMLS_CC);
 		}
-		encodeValue(ss, *hv, opts, sht, oht, tht TSRMLS_CC);
-	}
+		encodeValue(ss, val, opts, sht, oht, tht TSRMLS_CC);
+	} ZEND_HASH_FOREACH_END();
 	smart_str_appendc(ss, 0x01);
 }
 
 static void encodeArray(smart_str *ss, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht, int len TSRMLS_DC) {
-	HashTable *ht = Z_ARRVAL_P(val);
-	HashPosition hp;
-	zval **hv;
-	if (encodeRef(ss, val, oht TSRMLS_CC)) return;
+	HashTable *ht = HASH_OF(val);
+	if (encodeRef(ss, ht, oht TSRMLS_CC)) return;
 	if (len != -1) { /* Encode as dense array */
 		if (len > AMF3_MAX_INT) len = AMF3_MAX_INT;
 		encodeU29(ss, (len << 1) | 1);
 		smart_str_appendc(ss, 0x01);
-		for (zend_hash_internal_pointer_reset_ex(ht, &hp) ;; zend_hash_move_forward_ex(ht, &hp)) {
-			if (zend_hash_get_current_data_ex(ht, (void **)&hv, &hp) != SUCCESS) break;
-			encodeValue(ss, *hv, opts, sht, oht, tht TSRMLS_CC);
-		}
+		ZEND_HASH_FOREACH_VAL(ht, val) {
+			encodeValue(ss, val, opts, sht, oht, tht TSRMLS_CC);
+		} ZEND_HASH_FOREACH_END();
 	} else { /* Encode as associative array */
 		smart_str_appendc(ss, 0x01);
 		encodeHash(ss, ht, opts, sht, oht, tht, 0 TSRMLS_CC);
@@ -139,18 +114,30 @@ static void encodeArray(smart_str *ss, zval *val, int opts, HashTable *sht, Hash
 }
 
 static void encodeObject(smart_str *ss, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
+	HashTable *ht = HASH_OF(val);
 	zend_class_entry *ce = Z_TYPE_P(val) == IS_OBJECT ? Z_OBJCE_P(val) : zend_standard_class_def;
 	int *oidx, nidx;
-	if (encodeRef(ss, val, oht TSRMLS_CC)) return;
-	if (zend_hash_find(tht, (char *)&ce, sizeof(ce), (void **)&oidx) == SUCCESS) encodeU29(ss, (*oidx << 2) | 1);
+	if (encodeRef(ss, ht, oht TSRMLS_CC)) return;
+	if ((oidx = zend_hash_str_find_ptr(tht, (char *)&ce, sizeof(ce)))) encodeU29(ss, (*oidx << 2) | 1);
 	else {
 		nidx = zend_hash_num_elements(tht);
-		if (nidx <= AMF3_MAX_INT) zend_hash_add(tht, (char *)&ce, sizeof(ce), &nidx, sizeof(nidx), NULL);
+		if (nidx <= AMF3_MAX_INT) zend_hash_str_add_mem(tht, (char *)&ce, sizeof(ce), &nidx, sizeof(nidx));
 		smart_str_appendc(ss, 0x0b);
 		if (ce == zend_standard_class_def) smart_str_appendc(ss, 0x01); /* Anonymous object */
-		else encodeString(ss, ce->name, ce->name_length, sht TSRMLS_CC); /* Typed object */
+		else encodeString(ss, ZSTR_VAL(ce->name), ZSTR_LEN(ce->name), sht TSRMLS_CC); /* Typed object */
 	}
-	encodeHash(ss, HASH_OF(val), opts, sht, oht, tht, 1 TSRMLS_CC);
+	encodeHash(ss, ht, opts, sht, oht, tht, 1 TSRMLS_CC);
+}
+
+static int getLen(zval *val) {
+	int len = 0;
+	zend_ulong idx;
+	zend_string *key;
+	ZEND_HASH_FOREACH_KEY(HASH_OF(val), idx, key) {
+		if (key || (idx != len)) return -1;
+		++len;
+	} ZEND_HASH_FOREACH_END();
+	return len;
 }
 
 static void encodeValue(smart_str *ss, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
@@ -161,8 +148,11 @@ static void encodeValue(smart_str *ss, zval *val, int opts, HashTable *sht, Hash
 		case IS_NULL:
 			smart_str_appendc(ss, AMF3_NULL);
 			break;
-		case IS_BOOL:
-			smart_str_appendc(ss, Z_LVAL_P(val) ? AMF3_TRUE : AMF3_FALSE);
+		case IS_FALSE:
+			smart_str_appendc(ss, AMF3_FALSE);
+			break;
+		case IS_TRUE:
+			smart_str_appendc(ss, AMF3_TRUE);
 			break;
 		case IS_LONG: {
 			int n = Z_LVAL_P(val);
@@ -184,7 +174,7 @@ static void encodeValue(smart_str *ss, zval *val, int opts, HashTable *sht, Hash
 			encodeString(ss, Z_STRVAL_P(val), Z_STRLEN_P(val), sht TSRMLS_CC);
 			break;
 		case IS_ARRAY: {
-			int len = getHashLen(Z_ARRVAL_P(val));
+			int len = getLen(val);
 			if (!(opts & AMF3_FORCE_OBJECT) || (len != -1)) {
 				smart_str_appendc(ss, AMF3_ARRAY);
 				encodeArray(ss, val, opts, sht, oht, tht, len TSRMLS_CC);
@@ -196,22 +186,29 @@ static void encodeValue(smart_str *ss, zval *val, int opts, HashTable *sht, Hash
 			smart_str_appendc(ss, AMF3_OBJECT);
 			encodeObject(ss, val, opts, sht, oht, tht TSRMLS_CC);
 			break;
+		case IS_REFERENCE:
+			encodeValue(ss, Z_REFVAL_P(val), opts, sht, oht, tht TSRMLS_CC);
+			break;
 	}
+}
+
+static void freePtr(zval *val) {
+	efree(Z_PTR_P(val));
 }
 
 PHP_FUNCTION(amf3_encode) {
 	smart_str ss = { 0 };
 	zval *val;
-	long opts = 0;
+	zend_long opts = 0;
 	HashTable sht, oht, tht;
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z|l", &val, &opts) == FAILURE) return;
-	zend_hash_init(&sht, 0, NULL, NULL, 0);
-	zend_hash_init(&oht, 0, NULL, NULL, 0);
-	zend_hash_init(&tht, 0, NULL, NULL, 0);
+	zend_hash_init(&sht, 0, 0, freePtr, 0);
+	zend_hash_init(&oht, 0, 0, freePtr, 0);
+	zend_hash_init(&tht, 0, 0, freePtr, 0);
 	encodeValue(&ss, val, opts, &sht, &oht, &tht TSRMLS_CC);
 	zend_hash_destroy(&sht);
 	zend_hash_destroy(&oht);
 	zend_hash_destroy(&tht);
-	RETVAL_STRINGL(ss.c, ss.len, 1);
-	smart_str_free(&ss);
+	smart_str_0(&ss);
+	RETURN_STR(ss.s);
 }

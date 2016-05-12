@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2010, 2013-2014 Arseny Vakhrushev <arseny.vakhrushev at gmail dot com>
+** Copyright (C) 2010, 2013-2016 Arseny Vakhrushev <arseny.vakhrushev at gmail dot com>
 ** Please read the LICENSE file for license details
 */
 
@@ -36,29 +36,6 @@
 #define AMF3_CLASS_MAP       0x01
 #define AMF3_CLASS_AUTOLOAD  0x02
 #define AMF3_CLASS_CONSTRUCT 0x04
-
-
-#define ZVAL_RESET(A)         \
-	if (!(A)) {               \
-		ALLOC_INIT_ZVAL((A)); \
-	} else {                  \
-		zval_dtor((A));       \
-		ZVAL_NULL((A));       \
-	}
-
-/* PHP 5.2, old GC */
-#ifndef Z_ADDREF_P
-#define Z_ADDREF_P(A) ZVAL_ADDREF(A)
-#endif
-#ifndef Z_ADDREF_PP
-#define Z_ADDREF_PP(A) ZVAL_ADDREF(*(A))
-#endif
-#ifndef Z_DELREF_P
-#define Z_DELREF_P(A) ZVAL_DELREF(A)
-#endif
-#ifndef Z_DELREF_PP
-#define Z_DELREF_PP(A) ZVAL_DELREF(*(A))
-#endif
 
 
 #endif
