@@ -85,8 +85,11 @@ Project homepage: http://neoxic.me/php-amf3/
 Official Adobe AMF3 specification: http://www.adobe.com/go/amfspec
 
 
-History
--------
+Release history
+---------------
+
+Version 2.0.0 [2016-06-23]
++ PHP-NG (PHP7) support
 
 Version 1.2.3 [2014-10-19]
 + Support for previously unsupported AMF3 types

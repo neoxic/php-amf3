@@ -7,7 +7,7 @@
 #define PHP_AMF3_H
 
 
-#define PHP_AMF3_VERSION "2.0.0-beta1"
+#define PHP_AMF3_VERSION "2.0.0"
 
 extern zend_module_entry amf3_module_entry;
 #define phpext_amf3_ptr &amf3_module_entry
