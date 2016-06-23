@@ -165,7 +165,7 @@ static int decodeRef(const char *buf, int pos, int size, int *num, zval *val, Ha
 static void storeRef(HashTable *ht, zval *val) {
 	zval hv;
 	ZVAL_NEW_REF(&hv, val);
-	if (Z_REFCOUNTED_P(val)) Z_ADDREF_P(val);
+	Z_TRY_ADDREF_P(val);
 	zend_hash_next_index_insert(ht, &hv);
 }
 
@@ -183,7 +183,7 @@ static int decodeDate(const char *buf, int pos, int size, zval *val, HashTable *
 	return pos - old;
 }
 
-static zval *newItem(zval *val) {
+static zval *newIdx(zval *val) {
 	zval hv;
 	ZVAL_UNDEF(&hv);
 	return zend_hash_next_index_insert(HASH_OF(val), &hv);
@@ -215,7 +215,7 @@ static int decodeArray(const char *buf, int pos, int size, zval *val, int opts, 
 			pos += ofs;
 		}
 		while (len--) { /* Dense portion */
-			ofs = decodeValue(buf, pos, size, newItem(val), opts, sht, oht, tht TSRMLS_CC);
+			ofs = decodeValue(buf, pos, size, newIdx(val), opts, sht, oht, tht TSRMLS_CC);
 			if (ofs < 0) return -1;
 			pos += ofs;
 		}
@@ -370,7 +370,7 @@ static int decodeVector(const char *buf, int pos, int size, zval *val, int opts,
 		array_init(val);
 		storeRef(oht, val);
 		while (len--) {
-			ofs = decodeVectorItem(buf, pos, size, newItem(val), opts, sht, oht, tht, type TSRMLS_CC);
+			ofs = decodeVectorItem(buf, pos, size, newIdx(val), opts, sht, oht, tht, type TSRMLS_CC);
 			if (ofs < 0) return -1;
 			pos += ofs;
 		}
