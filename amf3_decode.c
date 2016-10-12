@@ -192,7 +192,7 @@ static zval *newIdx(zval *val) {
 static zval *newKey(zval *val, const char *key, int len) {
 	zval hv;
 	ZVAL_UNDEF(&hv);
-	return zend_hash_str_update(HASH_OF(val), key, len, &hv);
+	return zend_symtable_str_update(HASH_OF(val), key, len, &hv);
 }
 
 static int decodeArray(const char *buf, int pos, int size, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
