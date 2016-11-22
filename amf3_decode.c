@@ -459,7 +459,7 @@ static int decodeValue(const char *buf, int pos, int size, zval *val, int opts, 
 }
 
 static void freeTraits(zval *val) {
-	Traits *tr = (Traits *)Z_PTR_P(val);
+	Traits *tr = Z_PTR_P(val);
 	if (tr->cls) zend_string_release(tr->cls);
 	efree(tr->fld);
 	efree(tr->flen);
