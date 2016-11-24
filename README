@@ -88,6 +88,9 @@ Official Adobe AMF3 specification: http://www.adobe.com/go/amfspec
 Release history
 ---------------
 
+Version 2.0.1 [2016-11-24]
++ Fix $a["123"] (number as a string key) look-ups
+
 Version 2.0.0 [2016-06-23]
 + PHP-NG (PHP7) support
 
