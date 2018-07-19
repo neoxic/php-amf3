@@ -1,11 +1,27 @@
 /*
-** Copyright (C) 2010, 2013-2016 Arseny Vakhrushev <arseny.vakhrushev at gmail dot com>
-** Please read the LICENSE file for license details
+** Copyright (C) 2010-2018 Arseny Vakhrushev <arseny.vakhrushev@gmail.com>
+**
+** Permission is hereby granted, free of charge, to any person obtaining a copy
+** of this software and associated documentation files (the "Software"), to deal
+** in the Software without restriction, including without limitation the rights
+** to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+** copies of the Software, and to permit persons to whom the Software is
+** furnished to do so, subject to the following conditions:
+**
+** The above copyright notice and this permission notice shall be included in
+** all copies or substantial portions of the Software.
+**
+** THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+** IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+** FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+** AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+** LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+** OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+** THE SOFTWARE.
 */
 
 #ifndef AMF3_H
 #define AMF3_H
-
 
 #define AMF3_UNDEFINED     0x00
 #define AMF3_NULL          0x01
@@ -26,8 +42,8 @@
 #define AMF3_VECTOR_OBJECT 0x10
 #define AMF3_DICTIONARY    0x11
 
-#define AMF3_MAX_INT  268435455 /*  (2^28)-1 */
-#define AMF3_MIN_INT -268435456 /* -(2^28)   */
+#define AMF3_MAX_INT  268435455
+#define AMF3_MIN_INT -268435456
 
 // Encoding options
 #define AMF3_FORCE_OBJECT 0x01
@@ -36,6 +52,5 @@
 #define AMF3_CLASS_MAP       0x01
 #define AMF3_CLASS_AUTOLOAD  0x02
 #define AMF3_CLASS_CONSTRUCT 0x04
-
 
 #endif

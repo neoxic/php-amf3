@@ -66,7 +66,7 @@ $objs = array(
 		for ($i = 0; $i < $n; ++$i) {
 			$k = randStr(true);
 			$v = $any($d + 1);
-			if ($k && ($v !== NULL)) $a[$k] = $v;
+			if ($k && $v !== NULL) $a[$k] = $v;
 		}
 		$refs[] = $a;
 		return $a;
@@ -77,7 +77,7 @@ $objs = array(
 		for ($i = 0; $i < $n; ++$i) {
 			$k = randStr(true);
 			$v = $any($d + 1);
-			if ($k && ($v !== NULL)) $o->$k = $v;
+			if ($k && $v !== NULL) $o->$k = $v;
 		}
 		$refs[] = $o;
 		return $o;
@@ -85,7 +85,7 @@ $objs = array(
 );
 $nobj;
 $any = function ($d) use (&$vals, &$objs, &$nobj) {
-	if (($d < 4) && prob(0.7)) return $objs[rand(0, count($objs) - ($nobj ? 2 : 1))]($d);
+	if ($d < 4 && prob(0.7)) return $objs[rand(0, count($objs) - ($nobj ? 2 : 1))]($d);
 	return $vals[rand(0, count($vals) - 1)]();
 };
 
@@ -102,19 +102,19 @@ for ($i = 0; $i < 1000; ++$i) {
 	$nobj = prob(0.5);
 	$obj = spawn();
 	$str = amf3_encode($obj, $nobj ? AMF3_FORCE_OBJECT : 0);
-	$size = strlen($str);
-	$_size;
-	$_obj = amf3_decode($str, $_size, !$nobj ? AMF3_CLASS_MAP : 0);
-	if (($size != $_size) || ($obj != $_obj)) {
+	$pos = 0;
+	$obj_ = amf3_decode($str, $pos, !$nobj ? AMF3_CLASS_MAP : 0);
+	if ($pos != strlen($str) || $obj != $obj_) {
 		print(bin2hex($str) . "\n");
 		print(bin2hex(var_export($obj, true)) . "\n");
-		print(bin2hex(var_export($_obj, true)) . "\n");
+		print(bin2hex(var_export($obj_, true)) . "\n");
 		die();
 	}
 
 	// Additional decoder's robustness test
-	for ($pos = 1; $pos < $size; ++$pos) {
-		@amf3_decode(substr($str, $pos), $_size);
+	for ($pos_ = 1; $pos_ <= strlen($str); ++$pos_) {
+		$pos = $pos_;
+		@amf3_decode($str, $pos);
 	}
 }
 
@@ -152,9 +152,9 @@ $strs = array(
 	.		"\x03\x46\x02\x03\x46\x03" // Dynamic members: F:false, F:true (should reset the key)
 	.		"\x01" // End of dymanic part
 	.	"\x0a\x07\x07\x44\x45\x46" // Externalizable class DEF
-	.		"\x02" // _data:false
+	.		"\x02" // __data:false
 	.	"\x0a\x05" // Object (class reference 1)
-	.		"\x03" // _data:true
+	.		"\x03" // __data:true
 	.	"\x0a\x02" // Object (reference 1)
 	.	"\x0a\x04" // Object (reference 2)
 	.	"\x0a\x06" // Object (reference 3)
@@ -174,10 +174,10 @@ $strs = array(
 
 $ba = "\x11\x22\x33";
 $ma = array('A' => 2, 'B' => 1, 0 => false, true, 0);
-$o1 = array('A' => 1, 'B' => 2, 'C' => 3, 'D' => 4, 'E' => 5, '_class' => 'ABC');
-$o2 = array('A' => null, 'B' => false, 'C' => true, 'F' => true, '_class' => 'ABC');
-$o3 = array('_data' => false, '_class' => 'DEF');
-$o4 = array('_data' => true, '_class' => 'DEF');
+$o1 = array('A' => 1, 'B' => 2, 'C' => 3, 'D' => 4, 'E' => 5, '__class' => 'ABC');
+$o2 = array('A' => null, 'B' => false, 'C' => true, 'F' => true, '__class' => 'ABC');
+$o3 = array('__data' => false, '__class' => 'DEF');
+$o4 = array('__data' => true, '__class' => 'DEF');
 $vi = array(66051, -1);
 $vu = array(66051, (int)4294967295); // Type cast makes 32-bit systems happy
 $vd = array(0.1, 0.2);
@@ -192,13 +192,12 @@ $objs = array(
 for ($i = 0; $i < count($strs); ++$i) {
 	$str = $strs[$i];
 	$obj = $objs[$i];
-	$size = strlen($str);
-	$_size;
-	$_obj = amf3_decode($str, $_size);
-	if (($size != $_size) || ($obj != $_obj)) {
+	$pos = 0;
+	$obj_ = amf3_decode($str, $pos);
+	if ($pos !=  strlen($str) || $obj != $obj_) {
 		print(bin2hex($str) . "\n");
 		print(bin2hex(var_export($obj, true)) . "\n");
-		print(bin2hex(var_export($_obj, true)) . "\n");
+		print(bin2hex(var_export($obj_, true)) . "\n");
 		die();
 	}
 }

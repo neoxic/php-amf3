@@ -1,6 +1,23 @@
 /*
-** Copyright (C) 2010, 2013-2016 Arseny Vakhrushev <arseny.vakhrushev at gmail dot com>
-** Please read the LICENSE file for license details
+** Copyright (C) 2010-2018 Arseny Vakhrushev <arseny.vakhrushev@gmail.com>
+**
+** Permission is hereby granted, free of charge, to any person obtaining a copy
+** of this software and associated documentation files (the "Software"), to deal
+** in the Software without restriction, including without limitation the rights
+** to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+** copies of the Software, and to permit persons to whom the Software is
+** furnished to do so, subject to the following conditions:
+**
+** The above copyright notice and this permission notice shall be included in
+** all copies or substantial portions of the Software.
+**
+** THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+** IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+** FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+** AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+** LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+** OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+** THE SOFTWARE.
 */
 
 #ifdef HAVE_CONFIG_H
@@ -12,6 +29,10 @@
 #include "zend_interfaces.h"
 #include "amf3.h"
 
+/* For PHP 7.0 and 7.1 */
+#ifndef HT_ALLOW_COW_VIOLATION
+#define HT_ALLOW_COW_VIOLATION(ht)
+#endif
 
 typedef struct {
 	int fmt, cnt;
@@ -20,56 +41,53 @@ typedef struct {
 	int *flen;
 } Traits;
 
-
-static int decodeValue(const char *buf, int pos, int size, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC);
-
-static int decodeU8(const char *buf, int pos, int size, unsigned char *val TSRMLS_DC) {
+static size_t decodeU8(const char *buf, size_t pos, size_t size, int *val TSRMLS_DC) {
 	if (pos >= size) {
-		php_error(E_WARNING, "Insufficient U8 data at position %d", pos);
-		return -1;
+		php_error(E_WARNING, "Insufficient U8 data at position %zu", pos);
+		return 0;
 	}
-	*val = buf[pos];
-	return 1;
+	*val = buf[pos] & 0xff;
+	return pos + 1;
 }
 
-static int decodeU29(const char *buf, int pos, int size, int *val TSRMLS_DC) {
-	int n = 0, ofs = 0;
-	unsigned char b;
+static size_t decodeU29(const char *buf, size_t pos, size_t size, int *val TSRMLS_DC) {
+	int len = 0, n = 0;
+	unsigned char c;
 	buf += pos;
 	do {
-		if ((pos + ofs) >= size) {
-			php_error(E_WARNING, "Insufficient U29 data at position %d", pos);
-			return -1;
+		if (pos + len >= size) {
+			php_error(E_WARNING, "Insufficient U29 data at position %zu", pos);
+			return 0;
 		}
-		b = buf[ofs++];
-		if (ofs == 4) {
+		c = buf[len++];
+		if (len == 4) {
 			n <<= 8;
-			n |= b;
+			n |= c;
 			break;
 		}
 		n <<= 7;
-		n |= b & 0x7f;
-	} while (b & 0x80);
+		n |= c & 0x7f;
+	} while (c & 0x80);
 	*val = n;
-	return ofs;
+	return pos + len;
 }
 
-static int decodeInteger(const char *buf, int pos, int size, zval *val TSRMLS_DC) {
-	int n, ofs = decodeU29(buf, pos, size, &n TSRMLS_CC);
-	if (ofs < 0) return -1;
-	pos += ofs;
+static size_t decodeInteger(const char *buf, size_t pos, size_t size, zval *val TSRMLS_DC) {
+	int n;
+	pos = decodeU29(buf, pos, size, &n TSRMLS_CC);
+	if (!pos) return 0;
 	if (n & 0x10000000) n -= 0x20000000;
 	ZVAL_LONG(val, n);
-	return ofs;
+	return pos;
 }
 
-static int decodeU32(const char *buf, int pos, int size, zval *val, int sign TSRMLS_DC) {
+static size_t decodeU32(const char *buf, size_t pos, size_t size, zval *val, int sign TSRMLS_DC) {
 	union { int n; char c; } t;
 	union { unsigned n; char c[4]; } u;
 	long n;
-	if ((pos + 4) > size) {
-		php_error(E_WARNING, "Insufficient U32 data at position %d", pos);
-		return -1;
+	if (pos + 4 > size) {
+		php_error(E_WARNING, "Insufficient U32 data at position %zu", pos);
+		return 0;
 	}
 	buf += pos;
 	t.n = 1;
@@ -81,15 +99,15 @@ static int decodeU32(const char *buf, int pos, int size, zval *val, int sign TSR
 	if (sign) n = (signed)u.n;
 	else n = u.n;
 	ZVAL_LONG(val, n);
-	return 4;
+	return pos + 4;
 }
 
-static int decodeDouble(const char *buf, int pos, int size, zval *val TSRMLS_DC) {
+static size_t decodeDouble(const char *buf, size_t pos, size_t size, zval *val TSRMLS_DC) {
 	union { int n; char c; } t;
-	union { double d; char c[8]; } u;
-	if ((pos + 8) > size) {
-		php_error(E_WARNING, "Insufficient IEEE-754 data at position %d", pos);
-		return -1;
+	union { double n; char c[8]; } u;
+	if (pos + 8 > size) {
+		php_error(E_WARNING, "Insufficient IEEE-754 data at position %zu", pos);
+		return 0;
 	}
 	buf += pos;
 	t.n = 1;
@@ -98,21 +116,21 @@ static int decodeDouble(const char *buf, int pos, int size, zval *val TSRMLS_DC)
 		int i;
 		for (i = 0; i < 8; ++i) u.c[i] = buf[7 - i];
 	}
-	ZVAL_DOUBLE(val, u.d);
-	return 8;
+	ZVAL_DOUBLE(val, u.n);
+	return pos + 8;
 }
 
-static int decodeString(const char *buf, int pos, int size, zval *val, const char **str, int *len, HashTable *ht, int blob TSRMLS_DC) {
-	int old = pos, ofs, pfx, def;
-	ofs = decodeU29(buf, pos, size, &pfx TSRMLS_CC);
-	if (ofs < 0) return -1;
-	pos += ofs;
+static size_t decodeString(const char *buf, size_t pos, size_t size, zval *val, const char **str, int *len, HashTable *ht, int blob TSRMLS_DC) {
+	int pfx, def;
+	size_t _pos = pos;
+	pos = decodeU29(buf, pos, size, &pfx TSRMLS_CC);
+	if (!pos) return 0;
 	def = pfx & 1;
 	pfx >>= 1;
 	if (def) {
-		if ((pos + pfx) > size) {
-			php_error(E_WARNING, "Invalid string length %d at position %d", pfx, old);
-			return -1;
+		if (pos + pfx > size) {
+			php_error(E_WARNING, "Invalid string length %d at position %zu", pfx, _pos);
+			return 0;
 		}
 		buf += pos;
 		pos += pfx;
@@ -130,8 +148,8 @@ static int decodeString(const char *buf, int pos, int size, zval *val, const cha
 	} else {
 		zval *hv;
 		if (!(hv = zend_hash_index_find(ht, pfx))) {
-			php_error(E_WARNING, "Invalid string reference %d at position %d", pfx, old);
-			return -1;
+			php_error(E_WARNING, "Invalid string reference %d at position %zu", pfx, _pos);
+			return 0;
 		}
 		if (val) ZVAL_COPY(val, hv);
 		else {
@@ -139,27 +157,27 @@ static int decodeString(const char *buf, int pos, int size, zval *val, const cha
 			*len = Z_STRLEN_P(hv);
 		}
 	}
-	return pos - old;
+	return pos;
 }
 
-static int decodeRef(const char *buf, int pos, int size, int *num, zval *val, HashTable *ht TSRMLS_DC) {
-	int old = pos, ofs, pfx, def;
-	ofs = decodeU29(buf, pos, size, &pfx TSRMLS_CC);
-	if (ofs < 0) return -1;
-	pos += ofs;
+static size_t decodeRef(const char *buf, size_t pos, size_t size, int *num, zval *val, HashTable *ht TSRMLS_DC) {
+	int pfx, def;
+	size_t _pos = pos;
+	pos = decodeU29(buf, pos, size, &pfx TSRMLS_CC);
+	if (!pos) return 0;
 	def = pfx & 1;
 	pfx >>= 1;
 	if (def) *num = pfx;
 	else {
 		zval *hv;
 		if (!(hv = zend_hash_index_find(ht, pfx))) {
-			php_error(E_WARNING, "Invalid object reference %d at position %d", pfx, old);
-			return -1;
+			php_error(E_WARNING, "Invalid object reference %d at position %zu", pfx, _pos);
+			return 0;
 		}
 		*num = -1;
 		ZVAL_COPY(val, hv);
 	}
-	return pos - old;
+	return pos;
 }
 
 static void storeRef(HashTable *ht, zval *val) {
@@ -169,65 +187,62 @@ static void storeRef(HashTable *ht, zval *val) {
 	zend_hash_next_index_insert(ht, &hv);
 }
 
-static int decodeDate(const char *buf, int pos, int size, zval *val, HashTable *ht TSRMLS_DC) {
-	int old = pos, ofs, pfx;
-	ofs = decodeRef(buf, pos, size, &pfx, val, ht TSRMLS_CC);
-	if (ofs < 0) return -1;
-	pos += ofs;
+static size_t decodeDate(const char *buf, size_t pos, size_t size, zval *val, HashTable *ht TSRMLS_DC) {
+	int pfx;
+	pos = decodeRef(buf, pos, size, &pfx, val, ht TSRMLS_CC);
+	if (!pos) return 0;
 	if (pfx != -1) {
-		ofs = decodeDouble(buf, pos, size, val TSRMLS_CC);
-		if (ofs < 0) return -1;
-		pos += ofs;
+		pos = decodeDouble(buf, pos, size, val TSRMLS_CC);
+		if (!pos) return 0;
 		storeRef(ht, val);
 	}
-	return pos - old;
+	return pos;
 }
 
-static zval *newIdx(zval *val) {
+static zval *newHashIdx(zval *val) {
 	zval hv;
 	ZVAL_UNDEF(&hv);
 	return zend_hash_next_index_insert(HASH_OF(val), &hv);
 }
 
-static zval *newKey(zval *val, const char *key, int len) {
+static zval *newHashKey(zval *val, const char *key, size_t len) {
 	zval hv;
 	ZVAL_UNDEF(&hv);
 	return zend_symtable_str_update(HASH_OF(val), key, len, &hv);
 }
 
-static int decodeArray(const char *buf, int pos, int size, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
-	int old = pos, ofs, len;
-	ofs = decodeRef(buf, pos, size, &len, val, oht TSRMLS_CC);
-	if (ofs < 0) return -1;
-	pos += ofs;
+static size_t decodeValue(const char *buf, size_t pos, size_t size, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC);
+
+static size_t decodeArray(const char *buf, size_t pos, size_t size, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
+	int len;
+	pos = decodeRef(buf, pos, size, &len, val, oht TSRMLS_CC);
+	if (!pos) return 0;
 	if (len != -1) {
 		const char *key;
 		int klen;
 		array_init(val);
 		storeRef(oht, val);
-		for ( ;; ) { /* Associative portion */
-			ofs = decodeString(buf, pos, size, 0, &key, &klen, sht, 0 TSRMLS_CC);
-			if (ofs < 0) return -1;
-			pos += ofs;
+		HT_ALLOW_COW_VIOLATION(HASH_OF(val)); /* PHP DEBUG: Allow references to itself */
+		for (;;) { /* Associative portion */
+			pos = decodeString(buf, pos, size, 0, &key, &klen, sht, 0 TSRMLS_CC);
+			if (!pos) return 0;
 			if (!klen) break;
-			ofs = decodeValue(buf, pos, size, newKey(val, key, klen), opts, sht, oht, tht TSRMLS_CC);
-			if (ofs < 0) return -1;
-			pos += ofs;
+			pos = decodeValue(buf, pos, size, newHashKey(val, key, klen), opts, sht, oht, tht TSRMLS_CC);
+			if (!pos) return 0;
 		}
 		while (len--) { /* Dense portion */
-			ofs = decodeValue(buf, pos, size, newIdx(val), opts, sht, oht, tht TSRMLS_CC);
-			if (ofs < 0) return -1;
-			pos += ofs;
+			pos = decodeValue(buf, pos, size, newHashIdx(val), opts, sht, oht, tht TSRMLS_CC);
+			if (!pos) return 0;
 		}
 	}
-	return pos - old;
+	return pos;
 }
 
-static int decodeObject(const char *buf, int pos, int size, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
-	int old = pos, ofs, pfx;
-	ofs = decodeRef(buf, pos, size, &pfx, val, oht TSRMLS_CC);
-	if (ofs < 0) return -1;
-	pos += ofs;
+static size_t decodeObject(const char *buf, size_t pos, size_t size, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
+	int pfx;
+	size_t _pos = pos;
+	pos = decodeRef(buf, pos, size, &pfx, val, oht TSRMLS_CC);
+	if (!pos) return 0;
 	if (pfx != -1) {
 		int map = opts & AMF3_CLASS_MAP;
 		zend_class_entry *ce = 0;
@@ -242,25 +257,24 @@ static int decodeObject(const char *buf, int pos, int size, zval *val, int opts,
 			int clen;
 			const char **fld = 0;
 			int *flen = 0;
-			ofs = decodeString(buf, pos, size, 0, &cls, &clen, sht, 0 TSRMLS_CC); /* Class name */
-			if (ofs < 0) return -1;
-			pos += ofs;
+			pos = decodeString(buf, pos, size, 0, &cls, &clen, sht, 0 TSRMLS_CC); /* Class name */
+			if (!pos) return 0;
 			if (n > 0) {
-				if ((pos + n) > size) {
-					php_error(E_WARNING, "Invalid number of class members %d at position %d", n, old);
-					return -1;
+				if (pos + n > size) {
+					php_error(E_WARNING, "Invalid number of class members %d at position %zu", n, _pos);
+					return 0;
 				}
 				fld = emalloc(n * sizeof *fld);
 				flen = emalloc(n * sizeof *flen);
 				for (i = 0; i < n; ++i) { /* Static member names */
-					ofs = decodeString(buf, pos, size, 0, &key, &klen, sht, 0 TSRMLS_CC);
-					if (ofs < 0) {
+					size_t __pos = pos;
+					pos = decodeString(buf, pos, size, 0, &key, &klen, sht, 0 TSRMLS_CC);
+					if (!pos) {
 						n = -1;
 						break;
 					}
-					pos += ofs;
 					if (!klen || !key[0]) {
-						php_error(E_WARNING, "Invalid class member name at position %d", pos - ofs);
+						php_error(E_WARNING, "Invalid class member name at position %zu", __pos);
 						n = -1;
 						break;
 					}
@@ -270,7 +284,7 @@ static int decodeObject(const char *buf, int pos, int size, zval *val, int opts,
 				if (n < 0) {
 					efree(fld);
 					efree(flen);
-					return -1;
+					return 0;
 				}
 			}
 			tr = emalloc(sizeof *tr);
@@ -281,8 +295,8 @@ static int decodeObject(const char *buf, int pos, int size, zval *val, int opts,
 			tr->flen = flen;
 			zend_hash_next_index_insert_ptr(tht, tr);
 		} else if (!(tr = zend_hash_index_find_ptr(tht, pfx))) { /* Existing class definition */
-			php_error(E_WARNING, "Invalid class reference %d at position %d", pfx, old);
-			return -1;
+			php_error(E_WARNING, "Invalid class reference %d at position %zu", pfx, _pos);
+			return 0;
 		}
 		if (!map) array_init(val);
 		else {
@@ -292,47 +306,45 @@ static int decodeObject(const char *buf, int pos, int size, zval *val, int opts,
 				if (!(opts & AMF3_CLASS_AUTOLOAD)) mode |= ZEND_FETCH_CLASS_NO_AUTOLOAD;
 				ce = zend_fetch_class(tr->cls, mode TSRMLS_CC);
 				if (!ce) {
-					php_error(E_WARNING, "Unknown class '%s' at position %d", ZSTR_VAL(tr->cls), old);
-					return -1;
+					php_error(E_WARNING, "Unknown class '%s' at position %zu", ZSTR_VAL(tr->cls), _pos);
+					return 0;
 				}
 				object_init_ex(val, ce);
 			}
 		}
 		storeRef(oht, val);
+		HT_ALLOW_COW_VIOLATION(HASH_OF(val)); /* PHP DEBUG: Allow references to itself */
 		if (tr->fmt & 1) { /* Externalizable */
-			ofs = decodeValue(buf, pos, size, newKey(val, "_data", sizeof("_data") - 1), opts, sht, oht, tht TSRMLS_CC);
-			if (ofs < 0) return -1;
-			pos += ofs;
+			pos = decodeValue(buf, pos, size, newHashKey(val, "__data", sizeof "__data" - 1), opts, sht, oht, tht TSRMLS_CC);
+			if (!pos) return 0;
 		} else {
 			int i;
 			for (i = 0; i < tr->cnt; ++i) {
-				ofs = decodeValue(buf, pos, size, newKey(val, tr->fld[i], tr->flen[i]), opts, sht, oht, tht TSRMLS_CC);
-				if (ofs < 0) return -1;
-				pos += ofs;
+				pos = decodeValue(buf, pos, size, newHashKey(val, tr->fld[i], tr->flen[i]), opts, sht, oht, tht TSRMLS_CC);
+				if (!pos) return 0;
 			}
 			if (tr->fmt & 2) { /* Dynamic */
-				for ( ;; ) {
-					ofs = decodeString(buf, pos, size, 0, &key, &klen, sht, 0 TSRMLS_CC);
-					if (ofs < 0) return -1;
-					pos += ofs;
+				for (;;) {
+					size_t __pos = pos;
+					pos = decodeString(buf, pos, size, 0, &key, &klen, sht, 0 TSRMLS_CC);
+					if (!pos) return 0;
 					if (!klen) break;
 					if (map && !key[0]) {
-						php_error(E_WARNING, "Invalid class member name at position %d", pos - ofs);
-						return -1;
+						php_error(E_WARNING, "Invalid class member name at position %zu", __pos);
+						return 0;
 					}
-					ofs = decodeValue(buf, pos, size, newKey(val, key, klen), opts, sht, oht, tht TSRMLS_CC);
-					if (ofs < 0) return -1;
-					pos += ofs;
+					pos = decodeValue(buf, pos, size, newHashKey(val, key, klen), opts, sht, oht, tht TSRMLS_CC);
+					if (!pos) return 0;
 				}
 			}
 		}
-		if (!map && tr->cls) add_assoc_stringl(val, "_class", ZSTR_VAL(tr->cls), ZSTR_LEN(tr->cls));
+		if (!map && tr->cls) add_assoc_stringl(val, "__class", ZSTR_VAL(tr->cls), ZSTR_LEN(tr->cls));
 		else if (ce && (opts & AMF3_CLASS_CONSTRUCT)) { /* Call the constructor */
 			zend_call_method_with_0_params(val, ce, &ce->constructor, NULL, NULL);
-			if (EG(exception)) return -1;
+			if (EG(exception)) return 0;
 		}
 	}
-	return pos - old;
+	return pos;
 }
 
 static int decodeVectorItem(const char *buf, int pos, int size, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht, int type TSRMLS_DC) {
@@ -343,53 +355,47 @@ static int decodeVectorItem(const char *buf, int pos, int size, zval *val, int o
 			return decodeU32(buf, pos, size, val, 0 TSRMLS_CC);
 		case AMF3_VECTOR_DOUBLE:
 			return decodeDouble(buf, pos, size, val TSRMLS_CC);
-		case AMF3_VECTOR_OBJECT:
-			return decodeValue(buf, pos, size, val, opts, sht, oht, tht TSRMLS_CC);
 		default:
-			return -1;
+			return decodeValue(buf, pos, size, val, opts, sht, oht, tht TSRMLS_CC);
 	}
 }
 
-static int decodeVector(const char *buf, int pos, int size, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht, int type TSRMLS_DC) {
-	int old = pos, ofs, len;
-	ofs = decodeRef(buf, pos, size, &len, val, oht TSRMLS_CC);
-	if (ofs < 0) return -1;
-	pos += ofs;
+static size_t decodeVector(const char *buf, size_t pos, size_t size, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht, int type TSRMLS_DC) {
+	int len;
+	pos = decodeRef(buf, pos, size, &len, val, oht TSRMLS_CC);
+	if (!pos) return 0;
 	if (len != -1) {
-		unsigned char fv;
-		ofs = decodeU8(buf, pos, size, &fv TSRMLS_CC); /* 'fixed-vector' marker */
-		if (ofs < 0) return -1;
-		pos += ofs;
+		int fv;
+		pos = decodeU8(buf, pos, size, &fv TSRMLS_CC); /* 'fixed-vector' marker */
+		if (!pos) return 0;
 		if (type == AMF3_VECTOR_OBJECT) { /* 'object-type-name' marker */
 			const char *ot;
 			int otl;
-			ofs = decodeString(buf, pos, size, 0, &ot, &otl, sht, 0 TSRMLS_CC);
-			if (ofs < 0) return -1;
-			pos += ofs;
+			pos = decodeString(buf, pos, size, 0, &ot, &otl, sht, 0 TSRMLS_CC);
+			if (!pos) return 0;
 		}
 		array_init(val);
 		storeRef(oht, val);
+		HT_ALLOW_COW_VIOLATION(HASH_OF(val)); /* PHP DEBUG: Allow references to itself */
 		while (len--) {
-			ofs = decodeVectorItem(buf, pos, size, newIdx(val), opts, sht, oht, tht, type TSRMLS_CC);
-			if (ofs < 0) return -1;
-			pos += ofs;
+			pos = decodeVectorItem(buf, pos, size, newHashIdx(val), opts, sht, oht, tht, type TSRMLS_CC);
+			if (!pos) return 0;
 		}
 	}
-	return pos - old;
+	return pos;
 }
 
-static int decodeDictionary(const char *buf, int pos, int size, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
+static size_t decodeDictionary(const char *buf, size_t pos, size_t size, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
 	/* No support for dictionary in PHP */
-	php_error(E_WARNING, "Unsupported 'Dictionary' value at position %d", pos);
-	return -1;
+	php_error(E_WARNING, "Unsupported 'Dictionary' value at position %zu", pos);
+	return 0;
 }
 
-static int decodeValue(const char *buf, int pos, int size, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
-	int old = pos, ofs;
-	unsigned char type;
-	ofs = decodeU8(buf, pos, size, &type TSRMLS_CC);
-	if (ofs < 0) return -1;
-	pos += ofs;
+static size_t decodeValue(const char *buf, size_t pos, size_t size, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
+	int type;
+	size_t _pos = pos;
+	pos = decodeU8(buf, pos, size, &type TSRMLS_CC);
+	if (!pos) return 0;
 	switch (type) {
 		case AMF3_UNDEFINED:
 		case AMF3_NULL:
@@ -402,60 +408,33 @@ static int decodeValue(const char *buf, int pos, int size, zval *val, int opts, 
 			ZVAL_TRUE(val);
 			break;
 		case AMF3_INTEGER:
-			ofs = decodeInteger(buf, pos, size, val TSRMLS_CC);
-			if (ofs < 0) return -1;
-			pos += ofs;
-			break;
+			return decodeInteger(buf, pos, size, val TSRMLS_CC);
 		case AMF3_DOUBLE:
-			ofs = decodeDouble(buf, pos, size, val TSRMLS_CC);
-			if (ofs < 0) return -1;
-			pos += ofs;
-			break;
+			return decodeDouble(buf, pos, size, val TSRMLS_CC);
 		case AMF3_STRING:
-			ofs = decodeString(buf, pos, size, val, 0, 0, sht, 0 TSRMLS_CC);
-			if (ofs < 0) return -1;
-			pos += ofs;
-			break;
+			return decodeString(buf, pos, size, val, 0, 0, sht, 0 TSRMLS_CC);
 		case AMF3_XML:
 		case AMF3_XMLDOC:
 		case AMF3_BYTEARRAY:
-			ofs = decodeString(buf, pos, size, val, 0, 0, oht, 1 TSRMLS_CC);
-			if (ofs < 0) return -1;
-			pos += ofs;
-			break;
+			return decodeString(buf, pos, size, val, 0, 0, oht, 1 TSRMLS_CC);
 		case AMF3_DATE:
-			ofs = decodeDate(buf, pos, size, val, oht TSRMLS_CC);
-			if (ofs < 0) return -1;
-			pos += ofs;
-			break;
+			return decodeDate(buf, pos, size, val, oht TSRMLS_CC);
 		case AMF3_ARRAY:
-			ofs = decodeArray(buf, pos, size, val, opts, sht, oht, tht TSRMLS_CC);
-			if (ofs < 0) return -1;
-			pos += ofs;
-			break;
+			return decodeArray(buf, pos, size, val, opts, sht, oht, tht TSRMLS_CC);
 		case AMF3_OBJECT:
-			ofs = decodeObject(buf, pos, size, val, opts, sht, oht, tht TSRMLS_CC);
-			if (ofs < 0) return -1;
-			pos += ofs;
-			break;
+			return decodeObject(buf, pos, size, val, opts, sht, oht, tht TSRMLS_CC);
 		case AMF3_VECTOR_INT:
 		case AMF3_VECTOR_UINT:
 		case AMF3_VECTOR_DOUBLE:
 		case AMF3_VECTOR_OBJECT:
-			ofs = decodeVector(buf, pos, size, val, opts, sht, oht, tht, type TSRMLS_CC);
-			if (ofs < 0) return -1;
-			pos += ofs;
-			break;
+			return decodeVector(buf, pos, size, val, opts, sht, oht, tht, type TSRMLS_CC);
 		case AMF3_DICTIONARY:
-			ofs = decodeDictionary(buf, pos, size, val, opts, sht, oht, tht TSRMLS_CC);
-			if (ofs < 0) return -1;
-			pos += ofs;
-			break;
+			return decodeDictionary(buf, pos, size, val, opts, sht, oht, tht TSRMLS_CC);
 		default:
-			php_error(E_WARNING, "Invalid value type %d at position %d", type, old);
-			return -1;
+			php_error(E_WARNING, "Invalid value type %d at position %zu", type, _pos);
+			return 0;
 	}
-	return pos - old;
+	return pos;
 }
 
 static void freeTraits(zval *val) {
@@ -468,25 +447,31 @@ static void freeTraits(zval *val) {
 
 PHP_FUNCTION(amf3_decode) {
 	const char *buf;
-	size_t size;
-	zval *count = 0;
-	long opts = 0;
+	size_t size, pos = 0;
+	zval *pval = 0;
+	zend_long opts = 0;
 	HashTable sht, oht, tht;
-	int ofs;
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s|z/l", &buf, &size, &count, &opts) == FAILURE) return;
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s|z/l", &buf, &size, &pval, &opts) == FAILURE) return;
+	if (pval) {
+		if (Z_TYPE_P(pval) == IS_LONG) {
+			pos = Z_LVAL_P(pval);
+			if (pos > size) {
+				php_error(E_WARNING, "Position out of range");
+				ZVAL_LONG(pval, -1);
+				return;
+			}
+		}
+		zval_ptr_dtor(pval);
+	}
 	zend_hash_init(&sht, 0, 0, ZVAL_PTR_DTOR, 0);
 	zend_hash_init(&oht, 0, 0, ZVAL_PTR_DTOR, 0);
 	zend_hash_init(&tht, 0, 0, freeTraits, 0);
-	ofs = decodeValue(buf, 0, size, return_value, opts, &sht, &oht, &tht TSRMLS_CC);
+	pos = decodeValue(buf, pos, size, return_value, opts, &sht, &oht, &tht TSRMLS_CC);
 	zend_hash_destroy(&sht);
 	zend_hash_destroy(&oht);
 	zend_hash_destroy(&tht);
-	if (count) {
-		zval_ptr_dtor(count);
-		ZVAL_LONG(count, ofs);
-	}
-	if (ofs < 0) {
-		zval_ptr_dtor(return_value);
-		ZVAL_NULL(return_value);
-	}
+	if (pval) ZVAL_LONG(pval, pos ? pos : -1);
+	if (pos) return;
+	zval_ptr_dtor(return_value);
+	ZVAL_NULL(return_value);
 }
