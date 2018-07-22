@@ -76,7 +76,7 @@ static int encodeRefEx(smart_str *ss, const char *str, size_t len, HashTable *ht
 		return 1;
 	}
 	nidx = zend_hash_num_elements(ht);
-	if (nidx <= AMF3_MAX_INT) zend_hash_str_add_mem(ht, str, len, &nidx, sizeof nidx);
+	if (nidx <= AMF3_INT_MAX) zend_hash_str_add_mem(ht, str, len, &nidx, sizeof nidx);
 	return 0;
 }
 
@@ -85,7 +85,7 @@ static int encodeRef(smart_str *ss, void *ptr, HashTable *ht TSRMLS_DC) {
 }
 
 static void encodeString(smart_str *ss, const char *str, size_t len, HashTable *ht TSRMLS_DC) {
-	if (len > AMF3_MAX_INT) len = AMF3_MAX_INT;
+	if (len > AMF3_INT_MAX) len = AMF3_INT_MAX;
 	if (len && encodeRefEx(ss, str, len, ht TSRMLS_CC)) return; /* Empty string is never sent by reference */
 	encodeU29(ss, (len << 1) | 1);
 	smart_str_appendl(ss, str, len);
@@ -136,7 +136,7 @@ static void encodeObject(smart_str *ss, zval *val, int opts, HashTable *sht, Has
 	if ((oidx = zend_hash_str_find_ptr(tht, (char *)&ce, sizeof ce))) encodeU29(ss, (*oidx << 2) | 1);
 	else {
 		nidx = zend_hash_num_elements(tht);
-		if (nidx <= AMF3_MAX_INT) zend_hash_str_add_mem(tht, (char *)&ce, sizeof ce, &nidx, sizeof nidx);
+		if (nidx <= AMF3_INT_MAX) zend_hash_str_add_mem(tht, (char *)&ce, sizeof ce, &nidx, sizeof nidx);
 		smart_str_appendc(ss, 0x0b);
 		if (ce == zend_standard_class_def) smart_str_appendc(ss, 0x01); /* Anonymous object */
 		else encodeString(ss, ZSTR_VAL(ce->name), ZSTR_LEN(ce->name), sht TSRMLS_CC); /* Typed object */
@@ -149,7 +149,7 @@ static int getArrayLength(zval *val) {
 	zend_ulong idx;
 	zend_string *key;
 	ZEND_HASH_FOREACH_KEY(HASH_OF(val), idx, key) {
-		if (key || idx != len || ++len == AMF3_MAX_INT) return -1;
+		if (key || idx != len || ++len == AMF3_INT_MAX) return -1;
 	} ZEND_HASH_FOREACH_END();
 	return len;
 }
@@ -170,7 +170,7 @@ static void encodeValue(smart_str *ss, zval *val, int opts, HashTable *sht, Hash
 			break;
 		case IS_LONG: {
 			zend_long n = Z_LVAL_P(val);
-			if (n >= AMF3_MIN_INT && n <= AMF3_MAX_INT) {
+			if (n >= AMF3_INT_MIN && n <= AMF3_INT_MAX) {
 				smart_str_appendc(ss, AMF3_INTEGER);
 				encodeU29(ss, n);
 			} else {
