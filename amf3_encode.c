@@ -56,11 +56,11 @@ static void encodeU29(smart_str *ss, int val) {
 }
 
 static void encodeDouble(smart_str *ss, double val) {
-	union { int n; char c; } t;
-	union { double n; char c[8]; } u;
+	union { int i; char c; } t;
+	union { double d; char c[8]; } u;
 	char buf[8];
-	t.n = 1;
-	u.n = val;
+	t.i = 1;
+	u.d = val;
 	if (!t.c) memcpy(buf, u.c, 8);
 	else { /* Little-endian machine */
 		int i;
@@ -169,13 +169,13 @@ static void encodeValue(smart_str *ss, zval *val, int opts, HashTable *sht, Hash
 			smart_str_appendc(ss, AMF3_TRUE);
 			break;
 		case IS_LONG: {
-			zend_long n = Z_LVAL_P(val);
-			if (n >= AMF3_INT_MIN && n <= AMF3_INT_MAX) {
+			zend_long x = Z_LVAL_P(val);
+			if (x >= AMF3_INT_MIN && x <= AMF3_INT_MAX) {
 				smart_str_appendc(ss, AMF3_INTEGER);
-				encodeU29(ss, n);
+				encodeU29(ss, x);
 			} else {
 				smart_str_appendc(ss, AMF3_DOUBLE);
-				encodeDouble(ss, n);
+				encodeDouble(ss, x);
 			}
 			break;
 		}

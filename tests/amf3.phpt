@@ -50,12 +50,11 @@ $objs = array(
 		$n = count($refs);
 		return $n ? $refs[rand(0, $n - 1)] : NULL;
 	},
-	function ($d) use (&$refs, &$any) { // Indexed array
+	function ($d) use (&$refs, &$any) { // Dense array
 		$a = array();
 		$n = rand(0, 10);
 		for ($i = 0; $i < $n; ++$i) {
-			$v = $any($d + 1);
-			if ($v !== NULL) $a[] = $v;
+			$a[$i] = $any($d + 1);
 		}
 		$refs[] = $a;
 		return $a;
@@ -65,8 +64,7 @@ $objs = array(
 		$n = rand(0, 10);
 		for ($i = 0; $i < $n; ++$i) {
 			$k = randStr(true);
-			$v = $any($d + 1);
-			if ($k && $v !== NULL) $a[$k] = $v;
+			if ($k) $a[$k] = $any($d + 1);
 		}
 		$refs[] = $a;
 		return $a;
@@ -76,8 +74,7 @@ $objs = array(
 		$n = rand(0, 10);
 		for ($i = 0; $i < $n; ++$i) {
 			$k = randStr(true);
-			$v = $any($d + 1);
-			if ($k && $v !== NULL) $o->$k = $v;
+			if ($k) $o->$k = $any($d + 1);
 		}
 		$refs[] = $o;
 		return $o;

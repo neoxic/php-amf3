@@ -51,7 +51,7 @@ static size_t decodeU8(const char *buf, size_t pos, size_t size, int *val TSRMLS
 }
 
 static size_t decodeU29(const char *buf, size_t pos, size_t size, int *val TSRMLS_DC) {
-	int len = 0, n = 0;
+	int len = 0, x = 0;
 	unsigned char c;
 	buf += pos;
 	do {
@@ -61,62 +61,62 @@ static size_t decodeU29(const char *buf, size_t pos, size_t size, int *val TSRML
 		}
 		c = buf[len++];
 		if (len == 4) {
-			n <<= 8;
-			n |= c;
+			x <<= 8;
+			x |= c;
 			break;
 		}
-		n <<= 7;
-		n |= c & 0x7f;
+		x <<= 7;
+		x |= c & 0x7f;
 	} while (c & 0x80);
-	*val = n;
+	*val = x;
 	return pos + len;
 }
 
 static size_t decodeInteger(const char *buf, size_t pos, size_t size, zval *val TSRMLS_DC) {
-	int n;
-	pos = decodeU29(buf, pos, size, &n TSRMLS_CC);
+	int x;
+	pos = decodeU29(buf, pos, size, &x TSRMLS_CC);
 	if (!pos) return 0;
-	if (n & 0x10000000) n -= 0x20000000;
-	ZVAL_LONG(val, n);
+	if (x & 0x10000000) x -= 0x20000000;
+	ZVAL_LONG(val, x);
 	return pos;
 }
 
 static size_t decodeU32(const char *buf, size_t pos, size_t size, zval *val, int sign TSRMLS_DC) {
-	union { int n; char c; } t;
-	union { unsigned n; char c[4]; } u;
-	long n;
+	union { int i; char c; } t;
+	union { unsigned u; char c[4]; } u;
+	long x;
 	if (pos + 4 > size) {
 		php_error(E_WARNING, "Insufficient U32 data at position %zu", pos);
 		return 0;
 	}
 	buf += pos;
-	t.n = 1;
+	t.i = 1;
 	if (!t.c) memcpy(u.c, buf, 4);
 	else { /* Little-endian machine */
 		int i;
 		for (i = 0; i < 4; ++i) u.c[i] = buf[3 - i];
 	}
-	if (sign) n = (signed)u.n;
-	else n = u.n;
-	ZVAL_LONG(val, n);
+	if (sign) x = (signed)u.u;
+	else x = u.u;
+	ZVAL_LONG(val, x);
 	return pos + 4;
 }
 
 static size_t decodeDouble(const char *buf, size_t pos, size_t size, zval *val TSRMLS_DC) {
-	union { int n; char c; } t;
-	union { double n; char c[8]; } u;
+	union { int i; char c; } t;
+	union { double d; char c[8]; } u;
 	if (pos + 8 > size) {
 		php_error(E_WARNING, "Insufficient IEEE-754 data at position %zu", pos);
 		return 0;
 	}
 	buf += pos;
-	t.n = 1;
+	t.i = 1;
 	if (!t.c) memcpy(u.c, buf, 8);
 	else { /* Little-endian machine */
 		int i;
 		for (i = 0; i < 8; ++i) u.c[i] = buf[7 - i];
 	}
-	ZVAL_DOUBLE(val, u.n);
+	ZVAL_DOUBLE(val, u.d);
 	return pos + 8;
 }
 
