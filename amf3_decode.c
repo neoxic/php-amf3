@@ -41,9 +41,9 @@ typedef struct {
 	int *flen;
 } Traits;
 
-static size_t decodeU8(const char *buf, size_t pos, size_t size, int *val TSRMLS_DC) {
+static size_t decodeByte(const char *buf, size_t pos, size_t size, int *val TSRMLS_DC) {
 	if (pos >= size) {
-		php_error(E_WARNING, "Insufficient U8 data at position %zu", pos);
+		php_error(E_WARNING, "Insufficient data at position %zu", pos);
 		return 0;
 	}
 	*val = buf[pos] & 0xff;
@@ -366,7 +366,7 @@ static size_t decodeVector(const char *buf, size_t pos, size_t size, zval *val, 
 	if (!pos) return 0;
 	if (len != -1) {
 		int fv;
-		pos = decodeU8(buf, pos, size, &fv TSRMLS_CC); /* 'fixed-vector' marker */
+		pos = decodeByte(buf, pos, size, &fv TSRMLS_CC); /* 'fixed-vector' marker */
 		if (!pos) return 0;
 		if (type == AMF3_VECTOR_OBJECT) { /* 'object-type-name' marker */
 			const char *ot;
@@ -394,7 +394,7 @@ static size_t decodeDictionary(const char *buf, size_t pos, size_t size, zval *v
 static size_t decodeValue(const char *buf, size_t pos, size_t size, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht TSRMLS_DC) {
 	int type;
 	size_t _pos = pos;
-	pos = decodeU8(buf, pos, size, &type TSRMLS_CC);
+	pos = decodeByte(buf, pos, size, &type TSRMLS_CC);
 	if (!pos) return 0;
 	switch (type) {
 		case AMF3_UNDEFINED:
