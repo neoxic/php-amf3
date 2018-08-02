@@ -42,8 +42,8 @@
 #define AMF3_VECTOR_OBJECT 0x10
 #define AMF3_DICTIONARY    0x11
 
-#define AMF3_INT_MAX  268435455
 #define AMF3_INT_MIN -268435456
+#define AMF3_INT_MAX 268435455
 
 // Encoding options
 #define AMF3_FORCE_OBJECT 0x01
