@@ -202,12 +202,14 @@ static size_t decodeDate(const char *buf, size_t pos, size_t size, zval *val, Ha
 static zval *newHashIdx(zval *val) {
 	zval hv;
 	ZVAL_UNDEF(&hv);
+	HT_ALLOW_COW_VIOLATION(HASH_OF(val)); /* PHP DEBUG: suppress reference counter check */
 	return zend_hash_next_index_insert(HASH_OF(val), &hv);
 }
 
 static zval *newHashKey(zval *val, const char *key, size_t len) {
 	zval hv;
 	ZVAL_UNDEF(&hv);
+	HT_ALLOW_COW_VIOLATION(HASH_OF(val)); /* PHP DEBUG: suppress reference counter check */
 	return zend_symtable_str_update(HASH_OF(val), key, len, &hv);
 }
 
@@ -222,7 +224,6 @@ static size_t decodeArray(const char *buf, size_t pos, size_t size, zval *val, i
 		int klen;
 		array_init(val);
 		storeRef(val, oht);
-		HT_ALLOW_COW_VIOLATION(HASH_OF(val)); /* PHP DEBUG: Allow references to itself */
 		for (;;) { /* Associative portion */
 			pos = decodeString(buf, pos, size, 0, &key, &klen, sht, 0);
 			if (!pos) return 0;
@@ -313,7 +314,6 @@ static size_t decodeObject(const char *buf, size_t pos, size_t size, zval *val, 
 			}
 		}
 		storeRef(val, oht);
-		HT_ALLOW_COW_VIOLATION(HASH_OF(val)); /* PHP DEBUG: Allow references to itself */
 		if (tr->fmt & 1) { /* Externalizable */
 			pos = decodeValue(buf, pos, size, newHashKey(val, "__data", sizeof "__data" - 1), opts, sht, oht, tht);
 			if (!pos) return 0;
@@ -338,8 +338,10 @@ static size_t decodeObject(const char *buf, size_t pos, size_t size, zval *val, 
 				}
 			}
 		}
-		if (!map && tr->cls) add_assoc_stringl(val, "__class", ZSTR_VAL(tr->cls), ZSTR_LEN(tr->cls));
-		else if (ce && (opts & AMF3_CLASS_CONSTRUCT)) { /* Call the constructor */
+		if (!map && tr->cls) {
+			HT_ALLOW_COW_VIOLATION(HASH_OF(val)); /* PHP DEBUG: suppress reference counter check */
+			add_assoc_stringl(val, "__class", ZSTR_VAL(tr->cls), ZSTR_LEN(tr->cls));
+		} else if (ce && (opts & AMF3_CLASS_CONSTRUCT)) { /* Call the constructor */
 			zend_call_method_with_0_params(Z_OBJ_P(val), ce, &ce->constructor, NULL, NULL);
 			if (EG(exception)) return 0;
 		}
@@ -376,7 +378,6 @@ static size_t decodeVector(const char *buf, size_t pos, size_t size, zval *val, 
 		}
 		array_init(val);
 		storeRef(val, oht);
-		HT_ALLOW_COW_VIOLATION(HASH_OF(val)); /* PHP DEBUG: Allow references to itself */
 		while (len--) {
 			pos = decodeVectorItem(buf, pos, size, newHashIdx(val), opts, sht, oht, tht, type);
 			if (!pos) return 0;
