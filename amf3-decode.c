@@ -120,7 +120,7 @@ static size_t decodeDouble(const char *buf, size_t pos, size_t size, zval *val) 
 	return pos + 8;
 }
 
-static size_t decodeString(const char *buf, size_t pos, size_t size, zval *val, const char **str, int *len, HashTable *ht, int blob) {
+static size_t decodeString(const char *buf, size_t pos, size_t size, zval *val, const char **str, int *len, HashTable *ht, int raw) {
 	int pfx, def;
 	size_t _pos = pos;
 	pos = decodeU29(buf, pos, size, &pfx);
@@ -139,7 +139,7 @@ static size_t decodeString(const char *buf, size_t pos, size_t size, zval *val, 
 			*str = buf;
 			*len = pfx;
 		}
-		if (blob || pfx) { /* Empty string is never sent by reference */
+		if (raw || pfx) { /* Empty string is never sent by reference */
 			zval hv;
 			if (val) ZVAL_COPY(&hv, val);
 			else ZVAL_STRINGL(&hv, buf, pfx);
@@ -342,7 +342,7 @@ static size_t decodeObject(const char *buf, size_t pos, size_t size, zval *val, 
 			HT_ALLOW_COW_VIOLATION(HASH_OF(val)); /* PHP DEBUG: suppress reference counter check */
 			add_assoc_stringl(val, "__class", ZSTR_VAL(tr->cls), ZSTR_LEN(tr->cls));
 		} else if (ce && (opts & AMF3_CLASS_CONSTRUCT)) { /* Call the constructor */
-			zend_call_method_with_0_params(Z_OBJ_P(val), ce, &ce->constructor, NULL, NULL);
+			zend_call_method_with_0_params(Z_OBJ_P(val), ce, &ce->constructor, 0, 0);
 			if (EG(exception)) return 0;
 		}
 	}

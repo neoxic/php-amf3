@@ -40,11 +40,21 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_amf3_decode, 0, 0, 1)
 	ZEND_ARG_INFO(0, options)
 ZEND_END_ARG_INFO()
 
-const zend_function_entry amf3_functions[] = {
+ZEND_BEGIN_ARG_INFO_EX(arginfo_AMF3Serializable___toAMF3, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+static const zend_function_entry amf3_functions[] = {
 	PHP_FE(amf3_encode, arginfo_amf3_encode)
 	PHP_FE(amf3_decode, arginfo_amf3_decode)
 	PHP_FE_END
 };
+
+static const zend_function_entry class_AMF3Serializable_methods[] = {
+	ZEND_ABSTRACT_ME_WITH_FLAGS(AMF3Serializable, __toAMF3, arginfo_AMF3Serializable___toAMF3, ZEND_ACC_PUBLIC | ZEND_ACC_ABSTRACT)
+	ZEND_FE_END
+};
+
+zend_class_entry *amf3_serializable_ce;
 
 zend_module_entry amf3_module_entry = {
 	STANDARD_MODULE_HEADER,
@@ -64,6 +74,9 @@ ZEND_GET_MODULE(amf3)
 #endif
 
 PHP_MINIT_FUNCTION(amf3) {
+	zend_class_entry ce;
+	INIT_CLASS_ENTRY(ce, "AMF3Serializable", class_AMF3Serializable_methods);
+	amf3_serializable_ce = zend_register_internal_interface(&ce);
 	REGISTER_LONG_CONSTANT("AMF3_FORCE_OBJECT", AMF3_FORCE_OBJECT, CONST_CS | CONST_PERSISTENT);
 	REGISTER_LONG_CONSTANT("AMF3_CLASS_MAP", AMF3_CLASS_MAP, CONST_CS | CONST_PERSISTENT);
 	REGISTER_LONG_CONSTANT("AMF3_CLASS_AUTOLOAD", AMF3_CLASS_AUTOLOAD, CONST_CS | CONST_PERSISTENT);

@@ -20,8 +20,7 @@
 ** THE SOFTWARE.
 */
 
-#ifndef AMF3_H
-#define AMF3_H
+#pragma once
 
 #define AMF3_UNDEFINED     0x00
 #define AMF3_NULL          0x01
@@ -45,12 +44,12 @@
 #define AMF3_INT_MIN -268435456
 #define AMF3_INT_MAX 268435455
 
-// Encoding options
+/* Encoding options */
 #define AMF3_FORCE_OBJECT 0x01
 
-// Decoding options
+/* Decoding options */
 #define AMF3_CLASS_MAP       0x01
 #define AMF3_CLASS_AUTOLOAD  0x02
 #define AMF3_CLASS_CONSTRUCT 0x04
 
-#endif
+extern zend_class_entry *amf3_serializable_ce;

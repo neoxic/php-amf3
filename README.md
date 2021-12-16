@@ -1,14 +1,27 @@
 AMF3 encoding/decoding extension for PHP
 ========================================
 
-The [PHP AMF3] extension provides two functions:
+[PHP-AMF3] extension provides the following API:
 
-### string amf3_encode(mixed $value [, int $opts = 0 ])
+### amf3_encode(mixed $value [, int $opts = 0 ])
 Returns a binary string containing an AMF3 representation of `$value`. On error, returns `FALSE`
 and issues a warning message. The `$opts` argument is a bitmask of the following bit constants:
 - `AMF3_FORCE_OBJECT`: force encoding non-indexed arrays as anonymous objects;
 
-### mixed amf3_decode(string $data [, int &$pos [, int $opts = 0 ]])
+Objects implementing `AMF3Serializable` interface can customize their AMF3 representation:
+```php
+class MyClass implements AMF3Serializable {
+    ...
+    public function __toAMF3() {
+        return [
+            'foo' => $this->getFoo(),
+            'bar' => $this->bar,
+        ];
+    }
+}
+```
+
+### amf3_decode(string $data [, int &$pos [, int $opts = 0 ]])
 Returns the value encoded in `$data`. Optional `$pos` marks where to start reading in `$data`
 (default is 0). Upon return, it contains the index of the first unread byte (-1 indicates an error).
 The `$opts` argument is a bitmask of the following bit constants:
@@ -52,4 +65,4 @@ Usage constraints
   Otherwise, they are returned as PHP objects.
 
 
-[PHP AMF3]: http://neoxic.me/php-amf3/
+[PHP-AMF3]: https://github.com/neoxic/php-amf3

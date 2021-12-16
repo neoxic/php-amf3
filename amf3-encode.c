@@ -29,6 +29,8 @@
 #include "zend_smart_str.h"
 #include "amf3.h"
 
+#define MAXDEPTH 100 /* Arbitrary call depth limit for recursion check */
+
 static void encodeU29(smart_str *ss, int val) {
 	char buf[4];
 	int len;
@@ -91,9 +93,9 @@ static void encodeString(smart_str *ss, const char *str, size_t len, HashTable *
 	smart_str_appendl(ss, str, len);
 }
 
-static void encodeValue(smart_str *ss, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht);
+static void encodeValue(smart_str *ss, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht, int lvl);
 
-static void encodeHash(smart_str *ss, HashTable *ht, int opts, HashTable *sht, HashTable *oht, HashTable *tht, int prop) {
+static void encodeHash(smart_str *ss, HashTable *ht, int opts, HashTable *sht, HashTable *oht, HashTable *tht, int lvl, int obj) {
 	zend_ulong idx;
 	zend_string *key;
 	zval *val;
@@ -102,33 +104,33 @@ static void encodeHash(smart_str *ss, HashTable *ht, int opts, HashTable *sht, H
 			const char *str = ZSTR_VAL(key);
 			size_t len = ZSTR_LEN(key);
 			if (!len) continue; /* Empty key can't be represented in AMF3 */
-			if (prop && !str[0]) continue; /* Skip private/protected property */
+			if (obj && !str[0]) continue; /* Skip private/protected property */
 			encodeString(ss, str, len, sht);
 		} else {
 			char buf[22];
 			encodeString(ss, buf, sprintf(buf, "%ld", idx), sht);
 		}
-		encodeValue(ss, val, opts, sht, oht, tht);
+		encodeValue(ss, val, opts, sht, oht, tht, lvl + 1);
 	} ZEND_HASH_FOREACH_END();
 	smart_str_appendc(ss, 0x01);
 }
 
-static void encodeArray(smart_str *ss, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht, int len) {
+static void encodeArray(smart_str *ss, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht, int lvl, int len) {
 	HashTable *ht = HASH_OF(val);
 	if (encodeRef(ss, ht, oht)) return;
 	if (len != -1) { /* Encode as dense array */
 		encodeU29(ss, (len << 1) | 1);
 		smart_str_appendc(ss, 0x01);
 		ZEND_HASH_FOREACH_VAL(ht, val) {
-			encodeValue(ss, val, opts, sht, oht, tht);
+			encodeValue(ss, val, opts, sht, oht, tht, lvl + 1);
 		} ZEND_HASH_FOREACH_END();
 	} else { /* Encode as associative array */
 		smart_str_appendc(ss, 0x01);
-		encodeHash(ss, ht, opts, sht, oht, tht, 0);
+		encodeHash(ss, ht, opts, sht, oht, tht, lvl, 0);
 	}
 }
 
-static void encodeObject(smart_str *ss, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht) {
+static void encodeObject(smart_str *ss, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht, int lvl) {
 	HashTable *ht = HASH_OF(val);
 	zend_class_entry *ce = Z_TYPE_P(val) == IS_OBJECT ? Z_OBJCE_P(val) : zend_standard_class_def;
 	int *oidx, nidx;
@@ -141,7 +143,7 @@ static void encodeObject(smart_str *ss, zval *val, int opts, HashTable *sht, Has
 		if (ce == zend_standard_class_def) smart_str_appendc(ss, 0x01); /* Anonymous object */
 		else encodeString(ss, ZSTR_VAL(ce->name), ZSTR_LEN(ce->name), sht); /* Typed object */
 	}
-	encodeHash(ss, ht, opts, sht, oht, tht, 1);
+	encodeHash(ss, ht, opts, sht, oht, tht, lvl, 1);
 }
 
 static int getArrayLength(zval *val) {
@@ -154,7 +156,7 @@ static int getArrayLength(zval *val) {
 	return len;
 }
 
-static void encodeValue(smart_str *ss, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht) {
+static void encodeValueData(smart_str *ss, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht, int lvl) {
 	switch (Z_TYPE_P(val)) {
 		default:
 			smart_str_appendc(ss, AMF3_UNDEFINED);
@@ -191,19 +193,37 @@ static void encodeValue(smart_str *ss, zval *val, int opts, HashTable *sht, Hash
 			int len = getArrayLength(val);
 			if (!(opts & AMF3_FORCE_OBJECT) || len != -1) {
 				smart_str_appendc(ss, AMF3_ARRAY);
-				encodeArray(ss, val, opts, sht, oht, tht, len);
+				encodeArray(ss, val, opts, sht, oht, tht, lvl, len);
 				break;
 			}
 			/* Fall through; encode array as object */
 		}
 		case IS_OBJECT:
 			smart_str_appendc(ss, AMF3_OBJECT);
-			encodeObject(ss, val, opts, sht, oht, tht);
+			encodeObject(ss, val, opts, sht, oht, tht, lvl);
 			break;
 		case IS_REFERENCE:
-			encodeValue(ss, Z_REFVAL_P(val), opts, sht, oht, tht);
+			encodeValue(ss, Z_REFVAL_P(val), opts, sht, oht, tht, lvl);
 			break;
 	}
+}
+
+static void encodeValue(smart_str *ss, zval *val, int opts, HashTable *sht, HashTable *oht, HashTable *tht, int lvl) {
+	zval func, res;
+	if (lvl > MAXDEPTH) zend_error_noreturn(E_ERROR, "Recursion detected");
+	if (Z_TYPE_P(val) != IS_OBJECT || !instanceof_function(Z_OBJCE_P(val), amf3_serializable_ce)) {
+		encodeValueData(ss, val, opts, sht, oht, tht, lvl);
+		return;
+	}
+	ZVAL_STRING(&func, "__toAMF3");
+	call_user_function(0, val, &func, &res, 0, 0);
+	zval_ptr_dtor(&func);
+	if (EG(exception)) {
+		zval_ptr_dtor(&res);
+		return;
+	}
+	encodeValueData(ss, &res, opts, sht, oht, tht, lvl);
+	zval_ptr_dtor(&res);
 }
 
 static void freePtr(zval *val) {
@@ -219,10 +239,14 @@ PHP_FUNCTION(amf3_encode) {
 	zend_hash_init(&sht, 0, 0, freePtr, 0);
 	zend_hash_init(&oht, 0, 0, freePtr, 0);
 	zend_hash_init(&tht, 0, 0, freePtr, 0);
-	encodeValue(&ss, val, opts, &sht, &oht, &tht);
+	encodeValue(&ss, val, opts, &sht, &oht, &tht, 0);
 	zend_hash_destroy(&sht);
 	zend_hash_destroy(&oht);
 	zend_hash_destroy(&tht);
+	if (EG(exception)) {
+		smart_str_free(&ss);
+		return;
+	}
 	smart_str_0(&ss);
 	RETURN_STR(ss.s);
 }
