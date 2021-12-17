@@ -2,7 +2,7 @@
 PHP-AMF3 test
 --SKIPIF--
 <?php
-	if (!extension_loaded('amf3')) die('skip: amf3 extension not available');
+	if (!extension_loaded('amf3')) die("PHP-AMF3 extension not available!\n");
 ?>
 --FILE--
 <?php
@@ -92,8 +92,9 @@ function spawn() {
 	return $any(0);
 }
 
-
-// Stress test
+//-------------//
+// Stress test //
+//-------------//
 
 for ($i = 0; $i < 1000; ++$i) {
 	$nobj = prob(0.5);
@@ -101,12 +102,7 @@ for ($i = 0; $i < 1000; ++$i) {
 	$str = amf3_encode($obj, $nobj ? AMF3_FORCE_OBJECT : 0);
 	$pos = 0;
 	$obj_ = amf3_decode($str, $pos, !$nobj ? AMF3_CLASS_MAP : 0);
-	if ($pos != strlen($str) || $obj != $obj_) {
-		print(bin2hex($str) . "\n");
-		print(bin2hex(var_export($obj, true)) . "\n");
-		print(bin2hex(var_export($obj_, true)) . "\n");
-		die();
-	}
+	if ($pos != strlen($str) || $obj != $obj_) die("Stress test failed!\n");
 
 	// Additional decoder's robustness test
 	for ($pos_ = 1; $pos_ <= strlen($str); ++$pos_) {
@@ -115,8 +111,9 @@ for ($i = 0; $i < 1000; ++$i) {
 	}
 }
 
-
-// Compliance test
+//-----------------//
+// Compliance test //
+//-----------------//
 
 $strs = array(
 	// Date, XML, XMLDoc, ByteArray
@@ -191,13 +188,27 @@ for ($i = 0; $i < count($strs); ++$i) {
 	$obj = $objs[$i];
 	$pos = 0;
 	$obj_ = amf3_decode($str, $pos);
-	if ($pos !=  strlen($str) || $obj != $obj_) {
-		print(bin2hex($str) . "\n");
-		print(bin2hex(var_export($obj, true)) . "\n");
-		print(bin2hex(var_export($obj_, true)) . "\n");
-		die();
+	if ($pos != strlen($str) || $obj != $obj_) die("Compliance test failed!\n");
+}
+
+//-----------------------//
+// AMF3Serializable test //
+//-----------------------//
+
+class S1 implements AMF3Serializable {
+	public function __toAMF3() {
+		return ['foo' => 123];
 	}
 }
 
+class S2 implements AMF3Serializable {
+	public function __toAMF3() {
+		return ['bar' => new S1()];
+	}
+}
+
+print(bin2hex(amf3_encode(new S2())) . "\n");
+
 ?>
 --EXPECT--
+090107626172090107666f6f047b0101
