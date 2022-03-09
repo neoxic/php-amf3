@@ -40,7 +40,7 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_amf3_decode, 0, 0, 1)
 	ZEND_ARG_INFO(0, options)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_INFO_EX(arginfo_AMF3Serializable___toAMF3, 0, 0, 0)
+ZEND_BEGIN_ARG_INFO(arginfo_AMF3Serializable___toAMF3, 0)
 ZEND_END_ARG_INFO()
 
 static const zend_function_entry amf3_functions[] = {
@@ -50,8 +50,8 @@ static const zend_function_entry amf3_functions[] = {
 };
 
 static const zend_function_entry class_AMF3Serializable_methods[] = {
-	ZEND_ABSTRACT_ME_WITH_FLAGS(AMF3Serializable, __toAMF3, arginfo_AMF3Serializable___toAMF3, ZEND_ACC_PUBLIC | ZEND_ACC_ABSTRACT)
-	ZEND_FE_END
+	PHP_ABSTRACT_ME(AMF3Serializable, __toAMF3, arginfo_AMF3Serializable___toAMF3)
+	PHP_FE_END
 };
 
 zend_class_entry *amf3_serializable_ce;
