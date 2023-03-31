@@ -196,8 +196,7 @@ static void encodeValueData(smart_str *ss, zval *val, int opts, HashTable *sht, 
 				encodeArray(ss, val, opts, sht, oht, tht, lvl, len);
 				break;
 			}
-			/* Fall through; encode array as object */
-		}
+		} /* Fall through; encode array as object */
 		case IS_OBJECT:
 			smart_str_appendc(ss, AMF3_OBJECT);
 			encodeObject(ss, val, opts, sht, oht, tht, lvl);
